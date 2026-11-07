@@ -983,6 +983,13 @@ private fun ExplorerSection(
             showRecent = false
         } else {
             val folderUri = target.folderUri
+                     if (folderUri != null && android.provider.DocumentsContract.isTreeUri(android.net.Uri.parse(folderUri)) &&
+             runCatching { android.provider.DocumentsContract.getDocumentId(android.net.Uri.parse(folderUri)) }.getOrNull() == null
+         ) {
+             editor.updateBrowseRoot(folderUri)
+             link.onNavHandled()
+             return@LaunchedEffect
+         }
             val chain = if (folderUri == null) emptyList() else withContext(Dispatchers.IO) { editor.folderChain(root, folderUri) }
             if (chain == null) {
                 opError = context.getString(R.string.err_open_folder)

@@ -683,14 +683,30 @@ private fun EditorScreen(
     /** Read the file at [uriStr] into [target]. The extension picks the surface: the two document
      *  types share the explorer but not much else. Reads off-thread behind the "Opening note…"
      *  spinner so a big embedded PDF doesn't freeze the UI. */
-    suspend fun openInto(target: Editor, uriStr: String) {
+        suspend fun openInto(target: Editor, uriStr: String) {
         val name = displayNameOf(resolver, Uri.parse(uriStr))
+        if (name != null && name.endsWith(".pdf", ignoreCase = true)) {
+            val root = target.browseRoot
+            if (root != null) {
+                val docId = runCatching { android.provider.DocumentsContract.getDocumentId(Uri.parse(uriStr)) }.getOrNull()
+                val parentId = docId?.substringBeforeLast('/', "")?.ifEmpty { null } ?: target.browseRootDocId(root)
+                val stem = com.xnotes.core.util.Paths.stem(name)
+                target.requestImport(stem, uriStr)
+                val newNoteUri = target.commitImportAsync(root, parentId, stem)
+                if (newNoteUri != null) {
+                    val newName = displayNameOf(resolver, Uri.parse(newNoteUri))
+                    target.openAsync(newNoteUri, newName)
+                }
+                return
+            }
+        }
         if (com.xnotes.core.util.DocumentKind.ofName(name ?: "") == com.xnotes.core.util.DocumentKind.CANVAS) {
             target.openCanvasAsync(uriStr, name)
         } else {
             target.openAsync(uriStr, name)
         }
     }
+
 
     fun openTreeFile(uriStr: String) {
         scope.launch { openInto(editor, uriStr) }

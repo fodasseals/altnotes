@@ -4093,6 +4093,11 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
     // --- in-app file explorer (a user-granted SAF tree) ---
 
     fun updateBrowseRoot(treeUri: String) {
+        val oldRoot = browseRoot
+        if (oldRoot != null && oldRoot != treeUri) {
+            val oldName = cachedRootName(oldRoot) ?: browseRootName(oldRoot) ?: "Pasta"
+            if (!isPinned(oldRoot)) savePins(pinnedFolders + com.xnotes.settings.PinnedFolder(oldRoot, oldName))
+        }
         colorNames = emptyMap()
         browseRoot = treeUri
         settings = settings.copy(browseRoot = treeUri)
@@ -4100,6 +4105,8 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
         browseCache.clear()
         rootNameCache.clear()
         reloadTemplateLibrary()
+        val newName = browseRootName(treeUri) ?: "Pasta"
+        if (!isPinned(treeUri)) savePins(pinnedFolders + com.xnotes.settings.PinnedFolder(treeUri, newName))
     }
 
     /** Browse the app's own private storage instead of a granted folder; no SAF grant needed. */
@@ -4107,9 +4114,9 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
         updateBrowseRoot(com.xnotes.platform.AppStorageDocumentsProvider.treeUri(appContext).toString())
     }
 
-    /** The pins under the current explorer root; the rest wait for their folder to be the root again. */
+    /** Mostra na barra lateral tanto subpastas fixadas quanto outras pastas raiz da memória interna! */
     val sidebarPins: List<com.xnotes.settings.PinnedFolder>
-        get() = browseRoot?.let { root -> pinnedFolders.filter { isUnderTree(it.uri, root) } }.orEmpty()
+        get() = pinnedFolders
 
     fun isPinned(uri: String): Boolean {
         val key = documentKey(uri)
@@ -5453,7 +5460,7 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
                         // dot-folders stay hidden from the explorer too.
                         if (name == SIDECAR_DIR) { sidecarDocId = id; continue }
                         if (name.startsWith(".")) continue
-                    } else if (!com.xnotes.core.util.DocumentKind.isDocument(name)) {
+                    } else if (!com.xnotes.core.util.DocumentKind.isDocument(name) && !name.endsWith(".pdf", ignoreCase = true)) {
                         continue
                     }
                     val docUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, id).toString()
@@ -5463,6 +5470,10 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
                 }
             }
         }
+             val noteStems = out.filter { !it.isDir && it.name.endsWith(".xnote", ignoreCase = true) }
+         .mapTo(HashSet()) { it.name.substringBeforeLast('.').lowercase() }
+     out.removeAll { !it.isDir && it.name.endsWith(".pdf", ignoreCase = true) && it.name.substringBeforeLast('.').lowercase() in noteStems }
+
         val colors = sidecarDocId?.let { readSidecarColors(tree, it) }.orEmpty()
         // SAF reports no creation time, so an item seen for the first time is stamped with the earlier of
         // now and its modified time: nothing was created after its last edit, and a fresh item gets now.
@@ -5801,7 +5812,7 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
                 while (c.moveToNext()) {
                     val name = c.getString(0) ?: continue
                     val isDir = c.getString(1) == android.provider.DocumentsContract.Document.MIME_TYPE_DIR
-                    if (if (isDir) !name.startsWith(".") else DocumentKind.isDocument(name)) n++
+                    if (if (isDir) !name.startsWith(".") else (DocumentKind.isDocument(name) || name.endsWith(".pdf", ignoreCase = true))) n++
                 }
             }
         }
