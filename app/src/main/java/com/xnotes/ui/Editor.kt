@@ -4041,8 +4041,9 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
                         doc.pdfFile?.delete()
                         deleteImageTemps(doc)
                     }
-                } ?: return@withContext null
-                rendered.also { thumbCache.store(key, it, generation) }
+             }
+             if (rendered == null) return@withContext null
+             rendered.also { thumbCache.store(key, it, generation) }
             }
             publishThumbnail(key, bmp, generation)
         }

@@ -744,7 +744,7 @@ private fun ToolGroupButton(editor: Editor) {
     var editingGroup by remember { mutableStateOf(false) }
     var activeGroup by remember { mutableStateOf(prefs.getString("active_group", "all") ?: "all") }
     var savedGroups by remember {
-        mutableStateOf(prefs.getStringSet("group_names", emptySet())?.toList()?.sorted() ?: emptyList())
+        mutableStateOf<List<String>>(prefs.getStringSet("group_names", null)?.toList()?.sorted() ?: emptyList())
     }
 
     fun applyItems(visibleSet: Set<ToolbarItem>?) {
