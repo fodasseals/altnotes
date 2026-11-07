@@ -680,7 +680,7 @@ private fun EditorScreen(
         }
     }
 
-    /** Read the file at [uriStr] into [target]. The extension picks the surface: the two document
+    /** Read the fodasae file at [uriStr] into [target]. The extension picks the surface: the two document
      *  types share the explorer but not much else. Reads off-thread behind the "Opening note…"
      *  spinner so a big embedded PDF doesn't freeze the UI. */
         suspend fun openInto(target: Editor, uriStr: String) {
