@@ -30,6 +30,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -125,6 +130,8 @@ fun Toolbar(
     var renaming by remember { mutableStateOf(false) }
     // Pinned outside the scrolling strip so closing a split pane is always one tap away.
     ToolbarFrame(armed = editor.tool, trailing = onClosePane?.let { { ClosePaneButton(it) } }) {
+        ToolGroupButton(editor)
+        Separator()
         // The bar is driven by the user-customisable layout; separators sit between non-empty
         // sections, and each item dispatches to its renderer (see ToolbarItemView).
         editor.toolbarLayout.visibleSections.forEachIndexed { si, section ->
@@ -724,4 +731,226 @@ private fun FitMenu(editor: Editor) {
         }
     }
 }
+/**
+ * Botão e menu de Grupos de Ferramentas Personalizados:
+ * Permite alternar entre "Mostrar todas", grupos salvos pelo usuário e criar/editar grupos
+ * escolhendo exatamente quais ferramentas ficam visíveis na barra.
+ */
+@Composable
+private fun ToolGroupButton(editor: Editor) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("altnotes_tool_groups", 0) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var editingGroup by remember { mutableStateOf(false) }
+    var activeGroup by remember { mutableStateOf(prefs.getString("active_group", "all") ?: "all") }
+    var savedGroups by remember {
+        mutableStateOf(prefs.getStringSet("group_names", emptySet())?.toList()?.sorted() ?: emptyList())
+    }
+
+    fun applyItems(visibleSet: Set<ToolbarItem>?) {
+        val base = com.xnotes.core.tools.ToolbarLayout.DEFAULT
+        if (visibleSet == null) {
+            editor.applyToolbarLayout(base)
+        } else {
+            // Mantém sempre o botão Início (HOME) e Cores (COLORS) + as ferramentas escolhidas no grupo
+            val next = base.copy(
+                sections = base.sections.map { sec ->
+                    sec.copy(
+                        entries = sec.entries.map { e ->
+                            e.copy(visible = e.item == ToolbarItem.HOME || e.item in visibleSet)
+                        }
+                    )
+                }
+            )
+            editor.applyToolbarLayout(next)
+        }
+    }
+
+    fun selectGroup(name: String) {
+        activeGroup = name
+        prefs.edit().putString("active_group", name).apply()
+        if (name == "all") {
+            applyItems(null)
+        } else {
+            val raw = prefs.getString("group_$name", "") ?: ""
+            val items = raw.split(",").mapNotNull { ToolbarItem.fromId(it.trim()) }.toSet()
+            if (items.isNotEmpty()) applyItems(items)
+        }
+    }
+
+    fun deleteGroup(name: String) {
+        val next = savedGroups.filter { it != name }
+        savedGroups = next
+        prefs.edit().putStringSet("group_names", next.toSet()).remove("group_$name").apply()
+        if (activeGroup == name) selectGroup("all")
+    }
+
+    Box {
+        ToolbarIcon(
+            icon = XnotesIcons.layers,
+            contentDescription = "Grupos de ferramentas",
+            active = activeGroup != "all",
+        ) {
+            menuOpen = true
+        }
+
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = if (activeGroup == "all") "✓ Mostrar todas" else "Mostrar todas",
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    selectGroup("all")
+                },
+            )
+            savedGroups.forEach { groupName ->
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (activeGroup == groupName) "✓ $groupName" else groupName,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = "✕",
+                                color = LocalPalette.current.danger.toComposeColor(),
+                                modifier = Modifier
+                                    .padding(start = 12.dp)
+                                    .clickable { deleteGroup(groupName) },
+                            )
+                        }
+                    },
+                    onClick = {
+                        menuOpen = false
+                        selectGroup(groupName)
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("+ Criar / Editar grupo…") },
+                onClick = {
+                    menuOpen = false
+                    editingGroup = true
+                },
+            )
+        }
+    }
+
+    if (editingGroup) {
+        var groupName by remember { mutableStateOf("") }
+        val selectableTools = remember {
+            listOf(
+                ToolbarItem.PEN to "Caneta",
+                ToolbarItem.HIGHLIGHTER to "Marca-texto",
+                ToolbarItem.ERASER to "Borracha",
+                ToolbarItem.SCREENSHOT to "Captura / Recorte",
+                ToolbarItem.LASSO to "Laço",
+                ToolbarItem.SELECT to "Selecionar",
+                ToolbarItem.PAN to "Mover tela",
+                ToolbarItem.TAPE to "Fita adesiva",
+                ToolbarItem.INSERT_SPACE to "Inserir espaço",
+                ToolbarItem.SHAPE to "Formas",
+                ToolbarItem.RULER to "Régua",
+                ToolbarItem.TEXT to "Texto",
+                ToolbarItem.TEXT_BOX to "Caixa de texto",
+                ToolbarItem.MARKUP to "Marcação de PDF",
+                ToolbarItem.WAND to "Tinta mágica",
+                ToolbarItem.CALLIGRAPHY to "Caligrafia",
+                ToolbarItem.DASHED to "Tracejado",
+                ToolbarItem.IMAGE to "Inserir Imagem/Áudio",
+                ToolbarItem.COLORS to "Paleta de Cores",
+                ToolbarItem.UNDO to "Desfazer",
+                ToolbarItem.REDO to "Refazer",
+                ToolbarItem.PAGE_NAV to "Navegação de páginas",
+                ToolbarItem.ZOOM to "Zoom",
+                ToolbarItem.FIT to "Ajustar página",
+                ToolbarItem.VIEW to "Modo de visualização",
+                ToolbarItem.SIDEBAR to "Painel lateral",
+                ToolbarItem.FULLSCREEN to "Tela cheia",
+            )
+        }
+        var checkedItems by remember {
+            mutableStateOf(
+                setOf(
+                    ToolbarItem.PEN,
+                    ToolbarItem.HIGHLIGHTER,
+                    ToolbarItem.ERASER,
+                    ToolbarItem.SCREENSHOT,
+                    ToolbarItem.LASSO,
+                    ToolbarItem.COLORS,
+                    ToolbarItem.UNDO,
+                    ToolbarItem.REDO,
+                )
+            )
+        }
+
+        AlertDialog(
+            onDismissRequest = { editingGroup = false },
+            title = { Text("Novo grupo de ferramentas") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .height(340.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    OutlinedTextField(
+                        value = groupName,
+                        onValueChange = { groupName = it },
+                        singleLine = true,
+                        label = { Text("Nome do grupo (ex: Leitura, Resumo)") },
+                    )
+                    selectableTools.forEach { (item, label) ->
+                        val isChecked = item in checkedItems
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable {
+                                    checkedItems = if (isChecked) checkedItems - item else checkedItems + item
+                                }
+                                .padding(vertical = 2.dp),
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { on ->
+                                    checkedItems = if (on) checkedItems + item else checkedItems - item
+                                },
+                            )
+                            Text(label, fontSize = 14.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val cleanName = groupName.trim()
+                        if (cleanName.isNotEmpty() && checkedItems.isNotEmpty()) {
+                            val nextNames = (savedGroups + cleanName).distinct().sorted()
+                            savedGroups = nextNames
+                            val serialized = checkedItems.joinToString(",") { it.id }
+                            prefs.edit()
+                                .putStringSet("group_names", nextNames.toSet())
+                                .putString("group_$cleanName", serialized)
+                                .apply()
+                            selectGroup(cleanName)
+                            editingGroup = false
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingGroup = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+}
+
 

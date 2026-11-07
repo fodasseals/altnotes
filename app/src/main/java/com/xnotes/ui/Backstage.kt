@@ -1073,8 +1073,8 @@ private fun ExplorerSection(
         if (layout != ExplorerLayout.TIMELINE) return@produceState
         value = withContext(Dispatchers.IO) { editor.filesUnder(root, currentDocId, includeSubfolders) }
     }
-    val shelves = prefs.homeOpensTo == "shelves" && stack.isEmpty() && !flat &&
-        (layout == ExplorerLayout.GRID || layout == ExplorerLayout.GALLERY || layout == ExplorerLayout.LIST)
+ val shelves = stack.isEmpty() && !flat &&
+     (layout == ExplorerLayout.GRID || layout == ExplorerLayout.GALLERY || layout == ExplorerLayout.LIST)
     val recents by produceState<List<RecentEntry>?>(null, root, showRecent || shelves, editor.recentDocs, refreshKey, editor.noteOpen, editor.treeVersion) {
         if (showRecent || shelves) value = withContext(Dispatchers.IO) { editor.recentEntries(root) }
     }
@@ -1593,16 +1593,39 @@ private fun ExplorerSection(
                     if (selection.isNotEmpty()) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { selection.clear() } else Modifier,
                 ),
         ) {
-            val shelfBlock: (@Composable () -> Unit)? = if (!shelves) null else ({
-                HomeShelves(
-                    body, recents.orEmpty(), pinned, layout == ExplorerLayout.GALLERY || (layout == ExplorerLayout.GRID && view.thumb == ThumbShape.PAGE),
-                    editor.sidebarPins, rootName ?: stringResource(R.string.folder),
-                    counts = countsLabel(words, arranged.orEmpty().count { it.isDir }, arranged.orEmpty().count { !it.isDir }),
-                    onSeeAll = { showRecent = true; selection.clear() },
-                    onOpenRecent = { host.onClick(it) },
-                    onOpenPin = { openChain(it.uri) },
-                )
-            })
+         val shelfBlock: (@Composable () -> Unit)? = if (!shelves) null else ({
+             Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                 Row(
+                     Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                     verticalAlignment = Alignment.CenterVertically,
+                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                 ) {
+                     ExplorerChip(
+                         label = "+ " + stringResource(R.string.choose_folder),
+                         selected = false,
+                         icon = XnotesIcons.newFolder,
+                         onClick = calls.pickRoot,
+                     )
+                 }
+                 HomeShelves(
+                     body, recents.orEmpty(), pinned, layout == ExplorerLayout.GALLERY || (layout == ExplorerLayout.GRID && view.thumb == ThumbShape.PAGE),
+                     editor.sidebarPins, rootName ?: stringResource(R.string.folder),
+                     counts = countsLabel(words, arranged.orEmpty().count { it.isDir }, arranged.orEmpty().count { !it.isDir }),
+                     onSeeAll = { showRecent = true; selection.clear() },
+                     onOpenRecent = { host.onClick(it) },
+                     onOpenPin = { pin ->
+                         if (android.provider.DocumentsContract.isTreeUri(android.net.Uri.parse(pin.uri)) &&
+                             runCatching { android.provider.DocumentsContract.getDocumentId(android.net.Uri.parse(pin.uri)) }.getOrNull() == null
+                         ) {
+                             editor.updateBrowseRoot(pin.uri)
+                         } else {
+                             openChain(pin.uri)
+                         }
+                     },
+                 )
+             }
+         })
+
             val gridTop: (LazyGridScope.() -> Unit)? = shelfBlock?.let { c -> { item(key = "shelves", span = { GridItemSpan(maxLineSpan) }, contentType = "shelves") { c() } } }
             when {
                 empty != null && !shelves -> Column(Modifier.fillMaxSize()) {

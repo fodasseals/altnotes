@@ -48,6 +48,7 @@ data class Settings(
     /** Global View-menu defaults; per-note [com.xnotes.canvas.ViewOverrides] shadow them. */
     val viewDefaults: com.xnotes.canvas.ViewSettings = com.xnotes.canvas.ViewSettings(),
     val tools: Map<Tool, ToolConfig> = emptyMap(),
+    val toolGroups: Map<String, ToolbarLayout> = emptyMap(),
     val shapeConfig: ShapeConfig = ShapeConfig(),
     val toolbarColors: List<Rgba> = InkPalette.presets,
     val toolbarColorCount: Int = 5,
