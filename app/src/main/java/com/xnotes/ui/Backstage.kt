@@ -301,34 +301,39 @@ private fun BackstageContent(
     val activeColor = if (view == BackstageView.HOME) explorerColor else null
     val recentActive = view == BackstageView.HOME && explorerRecent
     val pins = if (prefs.sidebarPinned) editor.sidebarPins else emptyList()
-    val activePin = if (view != BackstageView.HOME || explorerFolder == null || activeColor != null || recentActive) -1
-    else pins.indexOfFirst { runCatching { editor.browseDocId(it.uri) }.getOrNull() == explorerFolder }
-    val shownColors = if (prefs.sidebarColours) colors else emptyList()
-    // With Trash off it leaves the sidebar, once whatever was already in it is restored or emptied.
-    val trashCount = if (prefs.sidebarTrash && editor.browseRoot != null && (prefs.trashDays != 0 || editor.trashCount > 0)) editor.trashCount else -1
-    LaunchedEffect(editor.browseRoot) { editor.browseRoot?.let { r -> withContext(Dispatchers.IO) { editor.purgeExpiredTrash(r, prefs.trashDays) } } }
-    // Kept while its inputs hold, so folding the sidebar never recomposes the rail or the sidebar.
-    val showRecent = prefs.sidebarRecent && editor.browseRoot != null
-    val nav = remember(view, shownColors, activeColor, pins, activePin, trashCount, showRecent, recentActive) {
-        SidebarNav(
-            view = view,
-            homeSelected = view == BackstageView.HOME && activePin < 0 && activeColor == null && !recentActive,
-            recent = if (!showRecent) null else recentActive,
-            onRecent = { selectView(BackstageView.HOME); explorerNav = ExplorerNav(null, recent = true) },
-            colors = shownColors,
-            activeColor = activeColor,
-            pins = pins,
-            activePin = activePin,
-            trashCount = trashCount,
-            onHome = { selectView(BackstageView.HOME); explorerNav = ExplorerNav(null) },
-            onSelectView = selectView,
-            onOpenColor = { selectView(BackstageView.HOME); explorerNav = ExplorerNav(null, it) },
-            onRenameColor = { renamingColor = it },
-            onForgetColor = { c -> scope.launch { withContext(Dispatchers.IO) { editor.setColorName(c, null) } } },
-            onOpenPin = { selectView(BackstageView.HOME); explorerNav = ExplorerNav(it.uri) },
-            onUnpin = { editor.unpinFolder(it.uri) },
-        )
-    }
+ val activePin = if (view != BackstageView.HOME || explorerFolder == null || activeColor != null || recentActive) -1
+ else pins.indexOfFirst {
+     val pinId = runCatching { editor.browseDocId(it.uri) }.getOrNull()
+         ?: runCatching { editor.browseRootDocId(it.uri) }.getOrNull()
+     pinId == explorerFolder
+ }
+ val shownColors = if (prefs.sidebarColours) colors else emptyList()
+ // With Trash off it leaves the sidebar, once whatever was already in it is restored or emptied.
+ val trashCount = if (prefs.sidebarTrash && editor.browseRoot != null && (prefs.trashDays != 0 || editor.trashCount > 0)) editor.trashCount else -1
+ LaunchedEffect(editor.browseRoot) { editor.browseRoot?.let { r -> withContext(Dispatchers.IO) { editor.purgeExpiredTrash(r, prefs.trashDays) } } }
+ // Kept while its inputs hold, so folding the sidebar never recomposes the rail or the sidebar.
+ val showRecent = prefs.sidebarRecent && editor.browseRoot != null
+ val nav = remember(view, shownColors, activeColor, pins, activePin, trashCount, showRecent, recentActive) {
+     SidebarNav(
+         view = view,
+         homeSelected = view == BackstageView.HOME && explorerFolder == null && activeColor == null && !recentActive,
+         recent = if (!showRecent) null else recentActive,
+         onRecent = { selectView(BackstageView.HOME); explorerNav = ExplorerNav(null, recent = true) },
+         colors = shownColors,
+         activeColor = activeColor,
+         pins = pins,
+         activePin = activePin,
+         trashCount = trashCount,
+         onHome = { selectView(BackstageView.HOME); explorerNav = ExplorerNav(null) },
+         onSelectView = selectView,
+         onOpenColor = { selectView(BackstageView.HOME); explorerNav = ExplorerNav(null, it) },
+         onRenameColor = { renamingColor = it },
+         onForgetColor = { c -> scope.launch { withContext(Dispatchers.IO) { editor.setColorName(c, null) } } },
+         onOpenPin = { selectView(BackstageView.HOME); explorerNav = ExplorerNav(it.uri) },
+         onUnpin = { editor.unpinFolder(it.uri) },
+         onAddPin = calls.pickRoot,
+     )
+ }
     renamingColor?.let { c -> ColorNameDialog(editor, c) { renamingColor = null } }
 
     // Home is the app's root, so it owns every back press while it's up (the editor sits
@@ -441,6 +446,7 @@ private class SidebarNav(
     val onForgetColor: (Rgba) -> Unit,
     val onOpenPin: (PinnedFolder) -> Unit,
     val onUnpin: (PinnedFolder) -> Unit,
+    val onAddPin: () -> Unit = {},
 )
 
 /** The full sidebar: a pane on wide screens, a slide-over drawer on phones. */
@@ -475,14 +481,28 @@ private fun BackstageSidebar(modifier: Modifier, nav: SidebarNav, onCollapse: ()
                     }
                 }
             }
-            if (nav.pins.isNotEmpty()) {
-                SidebarLabel(stringResource(R.string.pinned))
-                nav.pins.forEachIndexed { i, pin ->
-                    key(pin.uri) {
-                        PinnedCommand(pin.name, selected = i == nav.activePin, onClick = { nav.onOpenPin(pin) }, onUnpin = { nav.onUnpin(pin) })
-                    }
-                }
-            }
+                     Row(
+             Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp, top = 12.dp, bottom = 2.dp),
+             verticalAlignment = Alignment.CenterVertically,
+         ) {
+             Text(
+                 stringResource(R.string.pinned),
+                 color = palette.textDim.toComposeColor(),
+                 fontSize = 12.sp,
+                 fontWeight = FontWeight.Medium,
+                 letterSpacing = 0.4.sp,
+                 modifier = Modifier.weight(1f),
+             )
+             IconButton(onClick = nav.onAddPin, modifier = Modifier.size(32.dp)) {
+                 Icon(XnotesIcons.plus, stringResource(R.string.choose_folder), tint = palette.accent.toComposeColor(), modifier = Modifier.size(18.dp))
+             }
+         }
+         nav.pins.forEachIndexed { i, pin ->
+             key(pin.uri) {
+                 PinnedCommand(pin.name, selected = i == nav.activePin, onClick = { nav.onOpenPin(pin) }, onUnpin = { nav.onUnpin(pin) })
+             }
+         }
+
         }
         RailDivider()
         if (nav.trashCount >= 0) {
@@ -964,116 +984,136 @@ private fun ExplorerSection(
     var colorFilter by remember(root) { mutableStateOf<Rgba?>(null) }
     var kindFilter by remember(root) { mutableStateOf<EntryKind?>(null) }
     // Set from the sidebar: what was opened lately, from every folder, in place of the folder.
-    var showRecent by remember(root) { mutableStateOf(false) }
-    var includeSubfolders by remember(root) { mutableStateOf(true) }
-    var timelineMonth by remember(root) { mutableStateOf<YearMonth?>(null) }
-    var columnsPick by remember(root) { mutableStateOf<BrowseEntry?>(null) }
-    var namingColor by remember(root) { mutableStateOf<Rgba?>(null) }
-    var metaTick by remember(root) { mutableIntStateOf(0) }
-    fun clearUp() { selection.clear(); opError = null; columnsPick = null }
-    // A sidebar pick either filters by a colour or replaces the path with a folder's chain from the root.
-    LaunchedEffect(nav) {
-        val target = nav ?: return@LaunchedEffect
-        val color = target.color
-        if (target.recent) {
-            showRecent = true
-            colorFilter = null
-        } else if (color != null) {
-            colorFilter = color
-            showRecent = false
-        } else {
-            val folderUri = target.folderUri
-                     if (folderUri != null && android.provider.DocumentsContract.isTreeUri(android.net.Uri.parse(folderUri)) &&
+var onDashboard by remember { mutableStateOf(true) }
+ var showRecent by remember(root) { mutableStateOf(false) }
+ var includeSubfolders by remember(root) { mutableStateOf(true) }
+ var timelineMonth by remember(root) { mutableStateOf<YearMonth?>(null) }
+ var columnsPick by remember(root) { mutableStateOf<BrowseEntry?>(null) }
+ var namingColor by remember(root) { mutableStateOf<Rgba?>(null) }
+ var metaTick by remember(root) { mutableIntStateOf(0) }
+ fun clearUp() { selection.clear(); opError = null; columnsPick = null }
+ // A sidebar pick either filters by a colour or replaces the path with a folder's chain from the root.
+ LaunchedEffect(nav) {
+     val target = nav ?: return@LaunchedEffect
+     val color = target.color
+     if (target.recent) {
+         onDashboard = false
+         showRecent = true
+         colorFilter = null
+     } else if (color != null) {
+         onDashboard = false
+         colorFilter = color
+         showRecent = false
+     } else {
+         val folderUri = target.folderUri
+         if (folderUri == null) {
+             onDashboard = true
+             stack.clear()
+             colorFilter = null
+             showRecent = false
+         } else if (android.provider.DocumentsContract.isTreeUri(android.net.Uri.parse(folderUri)) &&
              runCatching { android.provider.DocumentsContract.getDocumentId(android.net.Uri.parse(folderUri)) }.getOrNull() == null
          ) {
+             onDashboard = false
+             stack.clear()
+             colorFilter = null
+             showRecent = false
              editor.updateBrowseRoot(folderUri)
              link.onNavHandled()
              return@LaunchedEffect
+         } else {
+             onDashboard = false
+             val chain = withContext(Dispatchers.IO) { editor.folderChain(root, folderUri) }
+             if (chain == null) {
+                 opError = context.getString(R.string.err_open_folder)
+             } else {
+                 stack.clear()
+                 stack.addAll(chain)
+                 opError = null
+             }
+             colorFilter = null
+             showRecent = false
          }
-            val chain = if (folderUri == null) emptyList() else withContext(Dispatchers.IO) { editor.folderChain(root, folderUri) }
-            if (chain == null) {
-                opError = context.getString(R.string.err_open_folder)
-            } else {
-                stack.clear()
-                stack.addAll(chain)
-                opError = null
-            }
-            colorFilter = null
-            showRecent = false
-        }
-        selection.clear()
-        columnsPick = null
-        query = ""
-        link.onNavHandled()
-    }
-    LaunchedEffect(currentDocId, colorFilter, showRecent) { link.onPlace(if (stack.isEmpty()) null else currentDocId, colorFilter, showRecent) }
-    LaunchedEffect(query) { if (query.isNotBlank()) { colorFilter = null; showRecent = false } }
-    // Home opens on the folder last shown when set to; until that's settled, nothing is saved over it.
-    var settled by remember(root) { mutableStateOf(false) }
-    LaunchedEffect(root) {
-        val last = editor.lastFolder
-        if (prefs.homeOpensTo == "last" && nav == null && last != null && stack.isEmpty()) {
-            withContext(Dispatchers.IO) { editor.folderChain(root, last) }?.let { chain -> if (stack.isEmpty()) stack.addAll(chain) }
-        }
-        settled = true
-    }
-    LaunchedEffect(currentDocId, settled) {
-        if (settled) editor.setLastFolder(if (stack.isEmpty()) null else android.provider.DocumentsContract.buildDocumentUriUsingTree(android.net.Uri.parse(root), currentDocId).toString())
-    }
-    // Changing folders drops a stale query so it can't carry into a folder the user just opened.
-    LaunchedEffect(currentDocId) { query = "" }
-    // Inside a subfolder, back climbs one level out (this sits below the Backstage's root
-    // handler, so it's consulted first and only fires while there's a folder to leave).
-    BackHandler(enabled = stack.isNotEmpty() && colorFilter == null) {
-        stack.removeAt(stack.lastIndex)
-        clearUp()
-    }
-    BackHandler(enabled = colorFilter != null) {
-        colorFilter = null
-        selection.clear()
-    }
-    BackHandler(enabled = showRecent) {
-        showRecent = false
-        selection.clear()
-    }
+     }
+     selection.clear()
+     columnsPick = null
+     query = ""
+     link.onNavHandled()
+ }
+ LaunchedEffect(currentDocId, colorFilter, showRecent, onDashboard) {
+     link.onPlace(if (onDashboard) null else currentDocId, colorFilter, showRecent)
+ }
+ LaunchedEffect(query) { if (query.isNotBlank()) { colorFilter = null; showRecent = false } }
+ // Home opens on the folder last shown when set to; until that's settled, nothing is saved over it.
+ var settled by remember(root) { mutableStateOf(false) }
+ LaunchedEffect(root) {
+     val last = editor.lastFolder
+     if (prefs.homeOpensTo == "last" && nav == null && last != null && stack.isEmpty()) {
+         withContext(Dispatchers.IO) { editor.folderChain(root, last) }?.let { chain -> if (stack.isEmpty()) stack.addAll(chain) }
+     }
+     settled = true
+ }
+ LaunchedEffect(currentDocId, settled) {
+     if (settled) editor.setLastFolder(if (stack.isEmpty()) null else android.provider.DocumentsContract.buildDocumentUriUsingTree(android.net.Uri.parse(root), currentDocId).toString())
+ }
+ // Changing folders drops a stale query so it can't carry into a folder the user just opened.
+ LaunchedEffect(currentDocId) { query = "" }
+ // Inside a subfolder, back climbs one level out (this sits below the Backstage's root
+ // handler, so it's consulted first and only fires while there's a folder to leave).
+ BackHandler(enabled = !onDashboard && stack.isEmpty() && colorFilter == null && !showRecent) {
+     onDashboard = true
+     clearUp()
+ }
+ BackHandler(enabled = stack.isNotEmpty() && colorFilter == null) {
+     stack.removeAt(stack.lastIndex)
+     clearUp()
+ }
+ BackHandler(enabled = colorFilter != null) {
+     colorFilter = null
+     selection.clear()
+ }
+ BackHandler(enabled = showRecent) {
+     showRecent = false
+     selection.clear()
+ }
 
-    val folderKey = editor.folderKey(root, currentDocId)
-    val view = editor.viewFor(folderKey)
-    val setView: (ExplorerView) -> Unit = { editor.setView(folderKey, it) }
-    val setViewNow = rememberUpdatedState(setView)
-    val searching = query.isNotBlank()
-    val flat = searching || colorFilter != null || showRecent
-    val layout = when {
-        flat && (view.layout == ExplorerLayout.COLUMNS || view.layout == ExplorerLayout.TIMELINE) -> ExplorerLayout.GRID
-        compactScreen && view.layout == ExplorerLayout.COLUMNS -> ExplorerLayout.LIST
-        else -> view.layout
-    }
-    val switcherLayouts = prefs.switcherLayouts.filter { !(compactScreen && it == ExplorerLayout.COLUMNS) }
+ val folderKey = editor.folderKey(root, currentDocId)
+ val view = editor.viewFor(folderKey)
+ val setView: (ExplorerView) -> Unit = { editor.setView(folderKey, it) }
+ val setViewNow = rememberUpdatedState(setView)
+ val searching = query.isNotBlank()
+ val flat = searching || colorFilter != null || showRecent
+ val layout = when {
+     flat && (view.layout == ExplorerLayout.COLUMNS || view.layout == ExplorerLayout.TIMELINE) -> ExplorerLayout.GRID
+     compactScreen && view.layout == ExplorerLayout.COLUMNS -> ExplorerLayout.LIST
+     else -> view.layout
+ }
+ val switcherLayouts = prefs.switcherLayouts.filter { !(compactScreen && it == ExplorerLayout.COLUMNS) }
 
-    // Listing. Re-keyed on noteOpen so returning from the editor re-queries the folder, picking up
-    // the just-closed note's new mtime (its tile refreshes) and any newly created/discovered items.
-    val entries by produceState(editor.cachedChildren(root, currentDocId), root, currentDocId, refreshKey, editor.noteOpen, editor.treeVersion) {
-        value = withContext(Dispatchers.IO) { editor.browseChildren(root, currentDocId) }
-    }
-    val trimmed = query.trim()
-    // When searching, recurse the whole subtree (debounced) and show only the matching notes — no
-    // folders, since a deep hit doesn't belong to the folder the breadcrumb is sitting in.
-    val results by produceState<List<BrowseEntry>?>(emptyList(), root, currentDocId, trimmed, refreshKey, editor.noteOpen, editor.treeVersion) {
-        if (trimmed.isEmpty()) { value = emptyList(); return@produceState }
-        value = null
-        delay(250) // debounce keystrokes before walking the tree
-        value = withContext(Dispatchers.IO) { editor.searchNotes(root, currentDocId, trimmed) }
-    }
-    val colorResults by produceState<List<BrowseEntry>?>(null, root, colorFilter, refreshKey, editor.noteOpen, editor.treeVersion) {
-        val c = colorFilter ?: run { value = emptyList(); return@produceState }
-        value = null
-        value = withContext(Dispatchers.IO) { editor.findByColor(root, c) }
-    }
-    val timeline by produceState<TreeFiles?>(null, root, currentDocId, includeSubfolders, refreshKey, editor.noteOpen, editor.treeVersion, layout == ExplorerLayout.TIMELINE) {
-        if (layout != ExplorerLayout.TIMELINE) return@produceState
-        value = withContext(Dispatchers.IO) { editor.filesUnder(root, currentDocId, includeSubfolders) }
-    }
- val shelves = stack.isEmpty() && !flat &&
+ // Listing. Re-keyed on noteOpen so returning from the editor re-queries the folder, picking up
+ // the just-closed note's new mtime (its tile refreshes) and any newly created/discovered items.
+ val entries by produceState(editor.cachedChildren(root, currentDocId), root, currentDocId, refreshKey, editor.noteOpen, editor.treeVersion) {
+     value = withContext(Dispatchers.IO) { editor.browseChildren(root, currentDocId) }
+ }
+ val trimmed = query.trim()
+ // When searching, recurse the whole subtree (debounced) and show only the matching notes — no
+ // folders, since a deep hit doesn't belong to the folder the breadcrumb is sitting in.
+ val results by produceState<List<BrowseEntry>?>(emptyList(), root, currentDocId, trimmed, refreshKey, editor.noteOpen, editor.treeVersion) {
+     if (trimmed.isEmpty()) { value = emptyList(); return@produceState }
+     value = null
+     delay(250) // debounce keystrokes before walking the tree
+     value = withContext(Dispatchers.IO) { editor.searchNotes(root, currentDocId, trimmed) }
+ }
+ val colorResults by produceState<List<BrowseEntry>?>(null, root, colorFilter, refreshKey, editor.noteOpen, editor.treeVersion) {
+     val c = colorFilter ?: run { value = emptyList(); return@produceState }
+     value = null
+     value = withContext(Dispatchers.IO) { editor.findByColor(root, c) }
+ }
+ val timeline by produceState<TreeFiles?>(null, root, currentDocId, includeSubfolders, refreshKey, editor.noteOpen, editor.treeVersion, layout == ExplorerLayout.TIMELINE) {
+     if (layout != ExplorerLayout.TIMELINE) return@produceState
+     value = withContext(Dispatchers.IO) { editor.filesUnder(root, currentDocId, includeSubfolders) }
+ }
+ val shelves = onDashboard && stack.isEmpty() && !flat &&
      (layout == ExplorerLayout.GRID || layout == ExplorerLayout.GALLERY || layout == ExplorerLayout.LIST)
     val recents by produceState<List<RecentEntry>?>(null, root, showRecent || shelves, editor.recentDocs, refreshKey, editor.noteOpen, editor.treeVersion) {
         if (showRecent || shelves) value = withContext(Dispatchers.IO) { editor.recentEntries(root) }
@@ -1307,8 +1347,8 @@ private fun ExplorerSection(
     val body = remember(view, folderRow, groups, metas, counts, now, clock24, prefs, host, showRecent, recentByUri, folderNames, layout, words, pinned, restLabel, shelves, rootDocId) { ExplorerBody(
         editor = editor,
         view = view,
-        folders = folderRow,
-        groups = groups,
+        folders = if (shelves) emptyList() else folderRow,
+        groups = if (shelves) emptyList() else groups,
         // Home's shelves, when they're up, take the pinned notes in among their own.
         pinned = if (shelves) emptyList() else pinned,
         restLabel = restLabel,
@@ -1593,33 +1633,31 @@ private fun ExplorerSection(
                     if (selection.isNotEmpty()) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { selection.clear() } else Modifier,
                 ),
         ) {
-         val shelfBlock: (@Composable () -> Unit)? = if (!shelves) null else ({
-             Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                 Row(
-                     Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                     verticalAlignment = Alignment.CenterVertically,
-                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                 ) {
-                        ExplorerChip("+ " + stringResource(R.string.choose_folder), false, icon = XnotesIcons.newFolder, onClick = calls.pickRoot)
-                 }
-                 HomeShelves(
-                     body, recents.orEmpty(), pinned, layout == ExplorerLayout.GALLERY || (layout == ExplorerLayout.GRID && view.thumb == ThumbShape.PAGE),
-                     editor.sidebarPins, rootName ?: stringResource(R.string.folder),
-                     counts = countsLabel(words, arranged.orEmpty().count { it.isDir }, arranged.orEmpty().count { !it.isDir }),
-                     onSeeAll = { showRecent = true; selection.clear() },
-                     onOpenRecent = { host.onClick(it) },
-                     onOpenPin = { pin ->
-                         if (android.provider.DocumentsContract.isTreeUri(android.net.Uri.parse(pin.uri)) &&
-                             runCatching { android.provider.DocumentsContract.getDocumentId(android.net.Uri.parse(pin.uri)) }.getOrNull() == null
-                         ) {
-                             editor.updateBrowseRoot(pin.uri)
-                         } else {
-                             openChain(pin.uri)
-                         }
-                     },
-                 )
-             }
-         })
+      val shelfBlock: (@Composable () -> Unit)? = if (!shelves) null else ({
+          Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+              HomeShelves(
+                  body, recents.orEmpty(), pinned, layout == ExplorerLayout.GALLERY || (layout == ExplorerLayout.GRID && view.thumb == ThumbShape.PAGE),
+                  editor.sidebarPins + PinnedFolder("__ADD__", "+"), rootName ?: stringResource(R.string.folder),
+                  counts = "",
+                  onSeeAll = { onDashboard = false; showRecent = true; selection.clear() },
+                  onOpenRecent = { host.onClick(it) },
+                  onOpenPin = { pin ->
+                      if (pin.uri == "__ADD__") {
+                          calls.pickRoot()
+                      } else if (android.provider.DocumentsContract.isTreeUri(android.net.Uri.parse(pin.uri)) &&
+                          runCatching { android.provider.DocumentsContract.getDocumentId(android.net.Uri.parse(pin.uri)) }.getOrNull() == null
+                      ) {
+                          onDashboard = false
+                          stack.clear()
+                          editor.updateBrowseRoot(pin.uri)
+                      } else {
+                          onDashboard = false
+                          openChain(pin.uri)
+                      }
+                  },
+              )
+          }
+      })
 
             val gridTop: (LazyGridScope.() -> Unit)? = shelfBlock?.let { c -> { item(key = "shelves", span = { GridItemSpan(maxLineSpan) }, contentType = "shelves") { c() } } }
             when {

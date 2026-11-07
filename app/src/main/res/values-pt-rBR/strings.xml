@@ -1037,7 +1037,7 @@
     <string name="pinned_to_sidebar">Fixados na barra lateral</string>
     <string name="recent">Recentes</string>
     <string name="see_all">Ver tudo</string>
-    <string name="pinned">Fixados</string>
+    <string name="pinned">Diretórios</string>
     <string name="in_folder">Em %1$s</string>
     <plurals name="pages_count">
         <item quantity="one">%d página</item>
