@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">xnotes</string>
+    <string name="app_name" translatable="false">altnotes</string>
 
     <!-- Tools and toolbar items -->
     <string name="tool_pen">Pen</string>
@@ -370,6 +370,10 @@
     <string name="preferences">Preferences</string>
     <string name="reset_to_defaults">Reset to defaults</string>
     <string name="pref_general">General</string>
+    <string name="pref_language">Language</string>
+<string name="lang_system">System</string>
+<string name="lang_pt">Português</string>
+<string name="lang_en">English</string>
     <string name="pref_ui_theme">UI theme</string>
     <string name="theme_system">System</string>
     <string name="theme_dark">Dark</string>

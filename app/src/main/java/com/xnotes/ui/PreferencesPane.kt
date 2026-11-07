@@ -1,6 +1,9 @@
 package com.xnotes.ui
 
 import android.os.Build
+import android.app.LocaleManager
+import android.os.LocaleList
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -221,8 +224,39 @@ fun PreferencesPane(
                 .onGloballyPositioned { viewport = it.boundsInRoot() },
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            SectionTitle(stringResource(R.string.pref_general))
-            FieldLabel(stringResource(R.string.pref_ui_theme))
+                SectionTitle(stringResource(R.string.pref_general))
+
+                val context = LocalContext.current
+                var appLang by remember {
+                    mutableStateOf(
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            val locales = context.getSystemService(LocaleManager::class.java)?.applicationLocales
+                            if (locales == null || locales.isEmpty) "system"
+                            else if (locales.toLanguageTags().startsWith("pt")) "pt-BR"
+                            else "en"
+                        } else {
+                            context.getSharedPreferences("altnotes_lang", 0).getString("lang", "system") ?: "system"
+                        }
+                    )
+                }
+                fun changeLanguage(tag: String) {
+                    appLang = tag
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        val lm = context.getSystemService(LocaleManager::class.java)
+                        lm?.applicationLocales = if (tag == "system") LocaleList.getEmptyLocaleList() else LocaleList.forLanguageTags(tag)
+                    } else {
+                        context.getSharedPreferences("altnotes_lang", 0).edit().putString("lang", tag).apply()
+                        (context as? android.app.Activity)?.recreate()
+                    }
+                }
+                FieldLabel(stringResource(R.string.pref_language))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip(stringResource(R.string.lang_system), appLang == "system") { changeLanguage("system") }
+                    Chip(stringResource(R.string.lang_pt), appLang == "pt-BR") { changeLanguage("pt-BR") }
+                    Chip(stringResource(R.string.lang_en), appLang == "en") { changeLanguage("en") }
+                }
+
+                FieldLabel(stringResource(R.string.pref_ui_theme))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Chip(stringResource(R.string.theme_system), prefs.uiAppearance == "system") { update(prefs.copy(uiAppearance = "system")) }
                 Chip(stringResource(R.string.theme_dark), prefs.uiAppearance == "dark") { update(prefs.copy(uiAppearance = "dark")) }
