@@ -3943,43 +3943,43 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
         val generation = thumbnailGeneration
         synchronized(noteThumbs) { noteThumbs.get(uri)?.let { return it } }
         return withContext(thumbDispatcher) {
-            delay(150) // let a quick scroll-past cancel this before any heavy work begins
+            delay(150)
             if (!isActive || !isCurrentThumbnail(generation)) return@withContext null
             synchronized(noteThumbs) { noteThumbs.get(uri)?.let { return@withContext it } }
-                     val bmp = thumbCache.load(uri, generation) ?: run {
-             val u = android.net.Uri.parse(uri)
-             val name = queryDisplayName(u).orEmpty()
-             if (name.endsWith(".pdf", ignoreCase = true)) {
-                 val tmp = runCatching { java.io.File.createTempFile("thumb", ".pdf", pdfDir) }.getOrNull() ?: return@withContext null
-                 try {
-                     val copied = runCatching {
-                         appContext.contentResolver.openInputStream(u)?.use { inp -> java.io.FileOutputStream(tmp).use { out -> inp.copyTo(out) }; true } ?: false
-                     }.getOrDefault(false)
-                     if (!copied) return@withContext null
-                     val src = com.xnotes.platform.PdfSource.create(tmp) ?: return@withContext null
-                     try {
-                         val vs = viewSettingsFor(uri)
-                         src.renderPage(0, tilePx, tilePx, pdfPageFilterFor(vs), emptyList())?.also { thumbCache.store(uri, it, generation) } ?: return@withContext null
-                     } finally {
-                         src.close()
-                     }
-                 } finally {
-                     tmp.delete()
-                 }
-             } else {
-                 val doc = runCatching {
-                     appContext.contentResolver.openInputStream(u)?.use { codec.read(it, pdfDir, imageDir) }
-                 }.getOrNull() ?: return@withContext null
-                 doc.created?.let { createdStore.put(documentKey(uri), it) }
-                 try {
-                     val vs = viewSettingsFor(uri)
-                     renderDocThumbnailSquare(doc, tilePx, pdfPageFilterFor(vs), vs.rotation)?.also { thumbCache.store(uri, it, generation) } ?: return@withContext null
-                 } finally {
-                     doc.pdfFile?.delete()
-                     deleteImageTemps(doc)
-                 }
-             }
-         }
+            val bmp = thumbCache.load(uri, generation) ?: run {
+                val u = android.net.Uri.parse(uri)
+                val name = queryDisplayName(u).orEmpty()
+                if (name.endsWith(".pdf", ignoreCase = true)) {
+                    val tmp = runCatching { java.io.File.createTempFile("thumb", ".pdf", pdfDir) }.getOrNull() ?: return@withContext null
+                    try {
+                        val copied = runCatching {
+                            appContext.contentResolver.openInputStream(u)?.use { inp -> java.io.FileOutputStream(tmp).use { out -> inp.copyTo(out) }; true } ?: false
+                        }.getOrDefault(false)
+                        if (!copied) return@withContext null
+                        val src = com.xnotes.platform.PdfSource.create(tmp) ?: return@withContext null
+                        try {
+                            val vs = viewSettingsFor(uri)
+                            val surf = src.renderPage(0, tilePx, tilePx, pdfPageFilterFor(vs), emptyList()) ?: return@withContext null
+                            surf.bitmap.also { thumbCache.store(uri, it, generation) }
+                        } finally {
+                            src.close()
+                        }
+                    } finally {
+                        tmp.delete()
+                    }
+                } else {
+                    val doc = runCatching {
+                        appContext.contentResolver.openInputStream(u)?.use { codec.read(it, pdfDir, imageDir) }
+                    }.getOrNull() ?: return@withContext null
+                    doc.created?.let { createdStore.put(documentKey(uri), it) }
+                    try {
+                        val vs = viewSettingsFor(uri)
+                        renderDocThumbnailSquare(doc, tilePx, pdfPageFilterFor(vs), vs.rotation)?.also { thumbCache.store(uri, it, generation) } ?: return@withContext null
+                    } finally {
+                        doc.pdfFile?.delete()
+                        deleteImageTemps(doc)
+                    }
+                }
             }
             publishThumbnail(uri, bmp, generation)
         }
@@ -4006,42 +4006,42 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
             synchronized(noteThumbs) { noteThumbs.get(key)?.let { return@withContext it } }
             val bmp = thumbCache.load(key, generation) ?: run {
                 val u = android.net.Uri.parse(uri)
-             val rendered = if (name.endsWith(".pdf", ignoreCase = true)) {
-                 val tmp = runCatching { java.io.File.createTempFile("pthumb", ".pdf", pdfDir) }.getOrNull() ?: return@withContext null
-                 try {
-                     val copied = runCatching {
-                         appContext.contentResolver.openInputStream(u)?.use { inp -> java.io.FileOutputStream(tmp).use { out -> inp.copyTo(out) }; true } ?: false
-                     }.getOrDefault(false)
-                     if (!copied) return@withContext null
-                     val src = com.xnotes.platform.PdfSource.create(tmp) ?: return@withContext null
-                     try {
-                         val vs = viewSettingsFor(uri)
-                         src.renderPage(0, (pageThumbPx * 0.707).roundToInt(), pageThumbPx, pdfPageFilterFor(vs), emptyList())
-                     } finally {
-                         src.close()
-                     }
-                 } finally {
-                     tmp.delete()
-                 }
-             } else if (DocumentKind.ofName(name) == DocumentKind.CANVAS) {
-                 val doc = runCatching { appContext.contentResolver.openInputStream(u)?.use { canvasCodec.read(it, imageDir) } }.getOrNull()
-                     ?: return@withContext null
-                 try {
-                     renderCanvasThumbnail(doc, (pageThumbPx * 1.414).roundToInt(), pageThumbPx)
-                 } finally {
-                     deleteCanvasImageTemps(doc)
-                 }
-             } else {
-                 val doc = runCatching { appContext.contentResolver.openInputStream(u)?.use { codec.read(it, pdfDir, imageDir) } }.getOrNull()
-                     ?: return@withContext null
-                 try {
-                     val vs = viewSettingsFor(uri)
-                     renderDocPage(doc, 0, pageThumbPx, pdfPageFilterFor(vs), vs.rotation)
-                 } finally {
-                     doc.pdfFile?.delete()
-                     deleteImageTemps(doc)
-                 }
-             } ?: return@withContext null
+                val rendered = if (name.endsWith(".pdf", ignoreCase = true)) {
+                    val tmp = runCatching { java.io.File.createTempFile("pthumb", ".pdf", pdfDir) }.getOrNull() ?: return@withContext null
+                    try {
+                        val copied = runCatching {
+                            appContext.contentResolver.openInputStream(u)?.use { inp -> java.io.FileOutputStream(tmp).use { out -> inp.copyTo(out) }; true } ?: false
+                        }.getOrDefault(false)
+                        if (!copied) return@withContext null
+                        val src = com.xnotes.platform.PdfSource.create(tmp) ?: return@withContext null
+                        try {
+                            val vs = viewSettingsFor(uri)
+                            src.renderPage(0, (pageThumbPx * 0.707).roundToInt(), pageThumbPx, pdfPageFilterFor(vs), emptyList())?.bitmap
+                        } finally {
+                            src.close()
+                        }
+                    } finally {
+                        tmp.delete()
+                    }
+                } else if (DocumentKind.ofName(name) == DocumentKind.CANVAS) {
+                    val doc = runCatching { appContext.contentResolver.openInputStream(u)?.use { canvasCodec.read(it, imageDir) } }.getOrNull()
+                        ?: return@withContext null
+                    try {
+                        renderCanvasThumbnail(doc, (pageThumbPx * 1.414).roundToInt(), pageThumbPx)
+                    } finally {
+                        deleteCanvasImageTemps(doc)
+                    }
+                } else {
+                    val doc = runCatching { appContext.contentResolver.openInputStream(u)?.use { codec.read(it, pdfDir, imageDir) } }.getOrNull()
+                        ?: return@withContext null
+                    try {
+                        val vs = viewSettingsFor(uri)
+                        renderDocPage(doc, 0, pageThumbPx, pdfPageFilterFor(vs), vs.rotation)
+                    } finally {
+                        doc.pdfFile?.delete()
+                        deleteImageTemps(doc)
+                    }
+                } ?: return@withContext null
                 rendered.also { thumbCache.store(key, it, generation) }
             }
             publishThumbnail(key, bmp, generation)

@@ -1600,12 +1600,7 @@ private fun ExplorerSection(
                      verticalAlignment = Alignment.CenterVertically,
                      horizontalArrangement = Arrangement.spacedBy(8.dp),
                  ) {
-                     ExplorerChip(
-                         label = "+ " + stringResource(R.string.choose_folder),
-                         selected = false,
-                         icon = XnotesIcons.newFolder,
-                         onClick = calls.pickRoot,
-                     )
+                        ExplorerChip("+ " + stringResource(R.string.choose_folder), false, icon = XnotesIcons.newFolder, onClick = calls.pickRoot)
                  }
                  HomeShelves(
                      body, recents.orEmpty(), pinned, layout == ExplorerLayout.GALLERY || (layout == ExplorerLayout.GRID && view.thumb == ThumbShape.PAGE),
