@@ -377,7 +377,7 @@ private val DashedRectIcon: ImageVector by lazy {
         viewportHeight = 24f,
     ).apply {
         path(
-            stroke = SolidColor(Color.White),
+            stroke = SolidColor(androidx.compose.ui.graphics.Color.White),
             strokeLineWidth = 2f,
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round,
