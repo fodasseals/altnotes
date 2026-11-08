@@ -958,8 +958,9 @@ fun EraserConfigPopup(editor: ToolPopupHost, onDismiss: () -> Unit) {
             ToggleRow(stringResource(R.string.caption_scribble_erase), scribble) { scribble = it; emit() }
             Spacer(Modifier.size(8.dp))
 ModeChip("Apagar toda a escrita à mão", selected = false) {
-    editor.deleteSelection() // ou limpa as páginas conforme o modelo do Samsung Notes
+    (editor as? Editor)?.deleteSelection()
 }
+
 
         }
     }

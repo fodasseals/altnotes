@@ -340,7 +340,7 @@ private fun PenUnifiedButton(
             hint = if (isPenArmed) stringResource(R.string.tip_tap_for_settings) else null,
         ) {
             if (isPenArmed) {
-                setConfigForTool( if (popupOpen) null else shownPen )
+                setConfigForTool(if (popupOpen) null else shownPen)
             } else {
                 onPickPen(shownPen)
                 setConfigForTool(null)
@@ -390,10 +390,7 @@ private fun PenUnifiedButton(
                     }
                     DropdownMenuItem(
                         text = { Text("Ajustar espessura e traço…") },
-                        onClick = {
-                            // Abre o popup nativo de espessura/pressão da caneta escolhida
-                            setConfigForTool(null)
-                        },
+                        onClick = { setConfigForTool(null) },
                     )
                 }
                 ToolConfigPopup(editor, shownPen) { setConfigForTool(null) }

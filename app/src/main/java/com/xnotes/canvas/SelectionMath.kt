@@ -14,13 +14,25 @@ import com.xnotes.core.model.TapeItem
 import com.xnotes.core.shapes.ShapePath
 import com.xnotes.core.vector.PathFlattener
 
-/** A selected item plus the index of the page it lives on. */
 data class Selected(val pageIndex: Int, val item: CanvasItem)
 
 object SelectionMath {
 
     var includePartial: Boolean = true
 
+    // Versão para o Canvas Infinito (lista plana de CanvasItem)
+    fun bandMembers(items: List<CanvasItem>, band: Rect): List<CanvasItem> {
+        val ring = Ring(corners(band))
+        return items.filter { !it.locked && (ring.meets(it) || (includePartial && ring.overlaps(it.bounds()))) }
+    }
+
+    fun lassoMembers(items: List<CanvasItem>, polygon: List<Pt>): List<CanvasItem> {
+        if (polygon.size < 3) return emptyList()
+        val ring = Ring(polygon)
+        return items.filter { !it.locked && (ring.meets(it) || (includePartial && ring.overlaps(it.bounds()))) }
+    }
+
+    // Versão para Notas Paginadas (páginas e pageRects)
     fun bandMembers(
         pages: List<Page>,
         pageRects: List<Rect>,
