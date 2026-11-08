@@ -254,6 +254,7 @@ fun Toolbar(
                     },
                 )
 
+
                 Separator()
 
                 // Demais seções (Cores, Desfazer/Refazer, Inserir, etc.)
