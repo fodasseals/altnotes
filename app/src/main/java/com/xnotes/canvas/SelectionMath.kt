@@ -37,16 +37,37 @@ object SelectionMath {
      * are the same test with a page-space translation in front of it; sharing the rule is the
      * point, so the two canvases select alike.
      */
-    fun bandMembers(items: List<CanvasItem>, band: Rect): List<CanvasItem> {
-        val ring = Ring(corners(band))
-        return items.filter { !it.locked && ring.meets(it) }
+    var includePartial: Boolean = true
+
+    fun bandMembers(
+        pages: List<Page>,
+        pageRects: List<Rect>,
+        band: Rect,
+        toPage: (Int, Pt) -> Pt = { i, p -> Pt(p.x - pageRects[i].left, p.y - pageRects[i].top) },
+    ): List<Selected> = members(pages, pageRects, corners(band), toPage, partial = includePartial)
+
+    fun lassoMembers(
+        pages: List<Page>,
+        pageRects: List<Rect>,
+        polygon: List<Pt>,
+        toPage: (Int, Pt) -> Pt = { i, p -> Pt(p.x - pageRects[i].left, p.y - pageRects[i].top) },
+    ): List<Selected> {
+        if (polygon.size < 3) return emptyList()
+        return members(pages, pageRects, polygon, toPage, partial = includePartial)
     }
 
-    /** Lasso selection over a flat item list: the band's rule, with the loop as the ring. */
-    fun lassoMembers(items: List<CanvasItem>, polygon: List<Pt>): List<CanvasItem> {
-        if (polygon.size < 3) return emptyList()
-        val ring = Ring(polygon)
-        return items.filter { !it.locked && ring.meets(it) }
+    private fun members(pages: List<Page>, pageRects: List<Rect>, ring: List<Pt>, toPage: (Int, Pt) -> Pt, partial: Boolean): List<Selected> {
+        val reach = Rect.bounding(ring)
+        val out = ArrayList<Selected>()
+        for (i in pages.indices) {
+            val pr = pageRects.getOrNull(i) ?: continue
+            if (!pr.outset(OFF_PAGE_SLACK).intersects(reach)) continue
+            val local = Ring(ring.map { toPage(i, it) })
+            for (item in pages[i].items) {
+                if (!item.locked && (local.meets(item) || (partial && local.overlapsBounds(item)))) out.add(Selected(i, item))
+            }
+        }
+        return out
     }
 
     /**

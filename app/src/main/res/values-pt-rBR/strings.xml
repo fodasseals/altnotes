@@ -65,8 +65,8 @@
     <string name="caption_sensitivity">Sensibilidade</string>
     <string name="caption_multiplier">Multiplicador</string>
     <string name="caption_speed">Velocidade</string>
-    <string name="caption_tip_width">Porcentagem da largura da ponta</string>
-    <string name="caption_width">Largura</string>
+    <string name="caption_tip_width">Porcentagem da espessura da ponta</string>
+    <string name="caption_width">Espessura</string>
     <string name="caption_scale">Escala</string>
     <string name="caption_dash">Traço</string>
     <string name="caption_gap">Espaço</string>
@@ -395,7 +395,7 @@
     <string name="pref_filename_template">Modelo de nome do arquivo</string>
     <string name="pref_page">Página</string>
     <string name="pref_default_page_size">Tamanho padrão da página</string>
-    <string name="width_mm">Largura (mm)</string>
+    <string name="width_mm">Espessura (mm)</string>
     <string name="height_mm">Altura (mm)</string>
     <string name="pref_orientation">Orientação</string>
     <string name="orientation_portrait">Retrato (Vertical)</string>

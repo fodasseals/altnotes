@@ -4,6 +4,9 @@ on:
   push:
     branches: [ "master", "main" ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,6 +19,19 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+
+      - name: Garantir chave fixa para permitir atualizacao do APK
+        run: |
+          if [ ! -f ".github/debug.keystore" ]; then
+            keytool -genkey -v -keystore .github/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git add .github/debug.keystore
+            git commit -m "Chave fixa de assinatura do APK [skip ci]"
+            git push
+          fi
+          mkdir -p ~/.android
+          cp .github/debug.keystore ~/.android/debug.keystore
 
       - name: Setup Android SDK and NDK
         uses: android-actions/setup-android@v3

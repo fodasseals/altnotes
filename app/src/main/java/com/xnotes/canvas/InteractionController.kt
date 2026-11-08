@@ -816,8 +816,10 @@ fun onGenericMotion(e: MotionEvent) {
         //  - a finger pans unless finger-draw is enabled;
         //  - otherwise the armed tool.
 val isMouse = toolType == MotionEvent.TOOL_TYPE_MOUSE
+val altHeld = (e.metaState and KeyEvent.META_ALT_ON) != 0
 val mouseBtnAction: String? = if (isMouse) {
     when {
+        altHeld -> "pan"
         (e.buttonState and MotionEvent.BUTTON_TERTIARY) != 0 -> mouseMiddleButton
         (e.buttonState and MotionEvent.BUTTON_SECONDARY) != 0 -> mouseRightButton
         else -> null

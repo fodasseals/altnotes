@@ -956,6 +956,11 @@ fun EraserConfigPopup(editor: ToolPopupHost, onDismiss: () -> Unit) {
             if (editor.hostHasPdf) ToggleRow(stringResource(R.string.caption_erase_markups), markups) { markups = it; emit() }
             // A pen scribbled over ink erases it without picking up the eraser.
             ToggleRow(stringResource(R.string.caption_scribble_erase), scribble) { scribble = it; emit() }
+            Spacer(Modifier.size(8.dp))
+ModeChip("Apagar toda a escrita à mão", selected = false) {
+    editor.deleteSelection() // ou limpa as páginas conforme o modelo do Samsung Notes
+}
+
         }
     }
 }
@@ -1052,6 +1057,9 @@ fun MarkupToolPopup(editor: ToolPopupHost, onDismiss: () -> Unit) {
     val base = remember { editor.toolConfig(Tool.MARKUP) }
     var mode by remember { mutableStateOf(base.markupMode) }
     var intensity by remember { mutableStateOf((base.markupIntensity * 100).toFloat()) }
+    var squareTip by remember { mutableStateOf(false) }
+    var fitText by remember { mutableStateOf(false) }
+
 
     fun emit() = editor.updateToolConfig(Tool.MARKUP, base.copy(markupMode = mode, markupIntensity = intensity / 100.0))
 
@@ -1063,10 +1071,13 @@ fun MarkupToolPopup(editor: ToolPopupHost, onDismiss: () -> Unit) {
                     KindChip(markupIcon(m), stringResource(m.labelRes), selected = mode == m) { mode = m; emit() }
                 }
             }
-            if (mode == MarkupMode.HIGHLIGHT) {
-                val min = (ToolConfig.MARKUP_INTENSITY_MIN * 100).toFloat()
-                SliderRow(stringResource(R.string.caption_intensity), intensity, min..100f) { intensity = it; emit() }
-            }
+if (mode == MarkupMode.HIGHLIGHT) {
+    val min = (ToolConfig.MARKUP_INTENSITY_MIN * 100).toFloat()
+    SliderRow(stringResource(R.string.caption_intensity), intensity, min..100f) { intensity = it; emit() }
+    Spacer(Modifier.size(4.dp))
+    ToggleRow("Ponta quadrada", squareTip) { squareTip = it; emit() }
+    ToggleRow("Ajustar a espessura ao texto", fitText) { fitText = it; emit() }
+}
         }
     }
 }

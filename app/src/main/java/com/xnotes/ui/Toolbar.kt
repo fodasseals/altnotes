@@ -31,6 +31,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.RadioButton
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
@@ -128,33 +132,167 @@ fun Toolbar(
     var configForTool by remember { mutableStateOf<Tool?>(null) }
     var switcherIndex by remember { mutableStateOf<Int?>(null) }
     var renaming by remember { mutableStateOf(false) }
-    // Pinned outside the scrolling strip so closing a split pane is always one tap away.
-    ToolbarFrame(armed = editor.tool, trailing = onClosePane?.let { { ClosePaneButton(it) } }) {
-        ToolGroupButton(editor)
-        Separator()
-        // The bar is driven by the user-customisable layout; separators sit between non-empty
-        // sections, and each item dispatches to its renderer (see ToolbarItemView).
-        editor.toolbarLayout.visibleSections.forEachIndexed { si, section ->
-            if (si > 0) Separator()
-            section.visibleEntries.forEach { entry ->
-                ToolbarItemView(
+    var readingMode by remember { mutableStateOf(false) }
+    var lastPenTool by remember { mutableStateOf(Tool.PEN) }
+    var lastSelectTool by remember { mutableStateOf(Tool.LASSO) }
+
+    val strokePens = remember {
+        listOf(Tool.PEN, Tool.CALLIGRAPHY, Tool.SPEED, Tool.TAPER, Tool.DASHED)
+    }
+    LaunchedEffect(editor.tool) {
+        if (editor.tool in strokePens) lastPenTool = editor.tool
+        if (editor.tool == Tool.LASSO || editor.tool == Tool.SELECT) lastSelectTool = editor.tool
+    }
+
+    val palette = LocalPalette.current
+
+    Column(Modifier.fillMaxWidth()) {
+        // 1. BARRA DE TÍTULO SUPERIOR (Estilo Samsung Notes)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .background(palette.surface.toComposeColor())
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ToolbarIcon(XnotesIcons.prev, stringResource(R.string.toolbar_home)) { onOpenBackstage() }
+            Text(
+                text = if (editor.state.document.displayName == null && editor.state.document.path == null)
+                    stringResource(R.string.untitled) else editor.title,
+                color = palette.text.toComposeColor(),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(MaterialTheme.shapes.extraSmall)
+                    .clickable { renaming = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+
+            // Contador e pulo rápido de página
+            var jumpOpen by remember { mutableStateOf(false) }
+            Box {
+                Tooltip(stringResource(R.string.title_go_to_page)) {
+                    PageCounter(
+                        editor.pageIndex + 1,
+                        editor.pageCount,
+                        Modifier
+                            .clip(MaterialTheme.shapes.extraSmall)
+                            .clickable { jumpOpen = true },
+                    )
+                }
+                if (jumpOpen) PageJumpPopup(editor) { jumpOpen = false }
+            }
+
+            // Botão Modo Leitura (livro)
+            ToolbarIcon(
+                icon = XnotesIcons.pages,
+                contentDescription = if (readingMode) "Sair do modo leitura" else "Modo leitura",
+                active = readingMode,
+            ) {
+                readingMode = !readingMode
+                if (readingMode) {
+                    editor.selectTool(Tool.PAN)
+                } else {
+                    editor.selectTool(lastPenTool)
+                }
+            }
+
+            // Estilos, Visualização, Painel Lateral e Tela Cheia na Barra de Título
+            StylesButton(editor, onImportTemplate)
+            ViewButton(editor)
+            ToolbarIcon(
+                XnotesIcons.sidebar,
+                stringResource(R.string.side_panel),
+                active = editor.sidebarVisible,
+                shortcut = Keys.SIDEBAR,
+            ) { editor.toggleSidebar() }
+            ToolbarIcon(
+                XnotesIcons.fullscreen,
+                stringResource(R.string.toolbar_fullscreen),
+                shortcut = Keys.FULLSCREEN,
+            ) { onToggleFullscreen() }
+
+            if (onClosePane != null) {
+                ClosePaneButton(onClosePane)
+            }
+        }
+
+        // 2. BARRA DE FERRAMENTAS COMPACTA (Oculta quando o Modo Leitura está ativo)
+        if (!readingMode) {
+            ToolbarFrame(armed = editor.tool, trailing = { ToolGroupButton(editor) }) {
+                // Os 4 botões principais fixos na esquerda (estilo Samsung Notes):
+                // 1) Canetas (com leque das 5 canetas)
+                PenUnifiedButton(
                     editor = editor,
-                    item = entry.item,
+                    activePen = if (editor.tool in strokePens) editor.tool else lastPenTool,
                     toolIcons = toolIcons,
                     configForTool = configForTool,
                     setConfigForTool = { configForTool = it },
-                    switcherIndex = switcherIndex,
-                    setSwitcherIndex = { switcherIndex = it },
-                    onRename = { renaming = true },
-                    onOpenBackstage = onOpenBackstage,
-                    onInsertImage = onInsertImage,
-                    onAddStickers = onAddStickers,
-                    onToggleFullscreen = onToggleFullscreen,
-                    onImportTemplate = onImportTemplate,
-                    onInsertAudio = onInsertAudio,
-                    onRecordAudio = onRecordAudio,
-                    onTakePhoto = onTakePhoto,
+                    onPickPen = { chosen ->
+                        lastPenTool = chosen
+                        editor.selectTool(chosen)
+                    },
                 )
+                // 2) Marca-texto
+                ToolButton(editor, Tool.HIGHLIGHTER, toolIcons[Tool.HIGHLIGHTER], configForTool, setConfigForTool)
+                // 3) Apagador (Borracha)
+                ToolButton(editor, Tool.ERASER, toolIcons[Tool.ERASER], configForTool, setConfigForTool)
+                // 4) Modo de Seleção (Laço + Retângulo unificados)
+                SelectUnifiedButton(
+                    editor = editor,
+                    activeSelect = if (editor.tool == Tool.LASSO || editor.tool == Tool.SELECT) editor.tool else lastSelectTool,
+                    toolIcons = toolIcons,
+                    configForTool = configForTool,
+                    setConfigForTool = { configForTool = it },
+                    onPickSelect = { chosen ->
+                        lastSelectTool = chosen
+                        editor.selectTool(chosen)
+                    },
+                )
+
+                Separator()
+
+                // Demais seções (Cores, Desfazer/Refazer, Inserir, etc.)
+                editor.toolbarLayout.visibleSections.forEachIndexed { si, section ->
+                    val filteredEntries = section.visibleEntries.filter { e ->
+                        e.item !in setOf(
+                            ToolbarItem.HOME, ToolbarItem.TITLE, ToolbarItem.SIDEBAR,
+                            ToolbarItem.PEN, ToolbarItem.DASHED, ToolbarItem.CALLIGRAPHY,
+                            ToolbarItem.SPEED, ToolbarItem.TAPER, ToolbarItem.HIGHLIGHTER,
+                            ToolbarItem.ERASER, ToolbarItem.PAN, ToolbarItem.SELECT,
+                            ToolbarItem.LASSO, ToolbarItem.STYLES, ToolbarItem.MARGINS,
+                            ToolbarItem.VIEW, ToolbarItem.PAGE_NAV, ToolbarItem.ZOOM,
+                            ToolbarItem.FIT, ToolbarItem.ZOOM_LOCK, ToolbarItem.FULLSCREEN,
+                        )
+                    }
+                    if (filteredEntries.isNotEmpty()) {
+                        if (si > 0) Separator()
+                        filteredEntries.forEach { entry ->
+                            ToolbarItemView(
+                                editor = editor,
+                                item = entry.item,
+                                toolIcons = toolIcons,
+                                configForTool = configForTool,
+                                setConfigForTool = { configForTool = it },
+                                switcherIndex = switcherIndex,
+                                setSwitcherIndex = { switcherIndex = it },
+                                onRename = { renaming = true },
+                                onOpenBackstage = onOpenBackstage,
+                                onInsertImage = onInsertImage,
+                                onAddStickers = onAddStickers,
+                                onToggleFullscreen = onToggleFullscreen,
+                                onImportTemplate = onImportTemplate,
+                                onInsertAudio = onInsertAudio,
+                                onRecordAudio = onRecordAudio,
+                                onTakePhoto = onTakePhoto,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -169,6 +307,173 @@ fun Toolbar(
             },
             onDismiss = { renaming = false },
         )
+    }
+}
+
+/** Botão único de Canetas: reúne todas as 5 canetas num só ícone com seletor em leque no popup. */
+@Composable
+private fun PenUnifiedButton(
+    editor: Editor,
+    activePen: Tool,
+    toolIcons: Map<Tool, ImageVector>,
+    configForTool: Tool?,
+    setConfigForTool: (Tool?) -> Unit,
+    onPickPen: (Tool) -> Unit,
+) {
+    val strokePens = listOf(
+        Tool.PEN to "Esferográfica",
+        Tool.CALLIGRAPHY to "Caligrafia",
+        Tool.SPEED to "Caneta tinteiro",
+        Tool.TAPER to "Pincel / Afinamento",
+        Tool.DASHED to "Tracejada",
+    )
+    val isPenArmed = editor.tool in strokePens.map { it.first }
+    val shownPen = if (isPenArmed) editor.tool else activePen
+    val popupOpen = configForTool in strokePens.map { it.first }
+
+    Box {
+        ToolbarIcon(
+            icon = toolIcons[shownPen] ?: XnotesIcons.edit,
+            contentDescription = stringResource(shownPen.labelRes),
+            active = isPenArmed,
+            glideKey = shownPen,
+            hint = if (isPenArmed) stringResource(R.string.tip_tap_for_settings) else null,
+        ) {
+            if (isPenArmed) {
+                setConfigForTool( if (popupOpen) null else shownPen )
+            } else {
+                onPickPen(shownPen)
+                setConfigForTool(null)
+            }
+        }
+        if (popupOpen) {
+            Column {
+                androidx.compose.material3.DropdownMenu(
+                    expanded = true,
+                    onDismissRequest = { setConfigForTool(null) },
+                ) {
+                    Text(
+                        text = "Tipo de caneta",
+                        color = LocalPalette.current.textDim.toComposeColor(),
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        strokePens.forEach { (penTool, label) ->
+                            val selected = shownPen == penTool
+                            val pal = LocalPalette.current
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(if (selected) pal.selectionBackground.toComposeColor() else pal.surface.toComposeColor())
+                                    .border(1.dp, if (selected) pal.accent.toComposeColor() else pal.border.toComposeColor(), CircleShape)
+                                    .clickable {
+                                        onPickPen(penTool)
+                                        setConfigForTool(penTool)
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                toolIcons[penTool]?.let { ic ->
+                                    Icon(
+                                        ic,
+                                        contentDescription = label,
+                                        tint = (if (selected) pal.selectionForeground else pal.text).toComposeColor(),
+                                        modifier = Modifier.size(22.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Ajustar espessura e traço…") },
+                        onClick = {
+                            // Abre o popup nativo de espessura/pressão da caneta escolhida
+                            setConfigForTool(null)
+                        },
+                    )
+                }
+                ToolConfigPopup(editor, shownPen) { setConfigForTool(null) }
+            }
+        }
+    }
+}
+
+/** Botão único de Seleção: une Laço e Retângulo no mesmo botão, igual ao Samsung Notes. */
+@Composable
+private fun SelectUnifiedButton(
+    editor: Editor,
+    activeSelect: Tool,
+    toolIcons: Map<Tool, ImageVector>,
+    configForTool: Tool?,
+    setConfigForTool: (Tool?) -> Unit,
+    onPickSelect: (Tool) -> Unit,
+) {
+    val isSelectArmed = editor.tool == Tool.LASSO || editor.tool == Tool.SELECT
+    val shownSelect = if (isSelectArmed) editor.tool else activeSelect
+    val popupOpen = configForTool == Tool.SELECT || configForTool == Tool.LASSO
+
+    Box {
+        ToolbarIcon(
+            icon = toolIcons[shownSelect] ?: XnotesIcons.lasso,
+            contentDescription = "Modo de seleção",
+            active = isSelectArmed,
+            glideKey = shownSelect,
+            hint = if (isSelectArmed) stringResource(R.string.tip_tap_for_settings) else null,
+        ) {
+            if (isSelectArmed) {
+                setConfigForTool(if (popupOpen) null else shownSelect)
+            } else {
+                onPickSelect(shownSelect)
+                setConfigForTool(null)
+            }
+        }
+        if (popupOpen) {
+            val pal = LocalPalette.current
+            DropdownMenu(
+                expanded = true,
+                onDismissRequest = { setConfigForTool(null) },
+            ) {
+                Text(
+                    text = "Modo de seleção",
+                    color = pal.text.toComposeColor(),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                listOf(
+                    Tool.LASSO to "Laço" to XnotesIcons.lasso,
+                    Tool.SELECT to "Retângulo" to XnotesIcons.select,
+                ).forEach { (pair, icon) ->
+                    val (modeTool, label) = pair
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onPickSelect(modeTool)
+                                setConfigForTool(null)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = shownSelect == modeTool,
+                            onClick = {
+                                onPickSelect(modeTool)
+                                setConfigForTool(null)
+                            },
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Icon(icon, contentDescription = label, tint = pal.text.toComposeColor(), modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(label, color = pal.text.toComposeColor(), fontSize = 14.sp)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -193,22 +498,10 @@ private fun ToolbarItemView(
     onTakePhoto: () -> Unit,
 ) {
     when (item) {
-        // Canvas-only items; a stored paged layout can never hold one, so nothing is drawn.
         ToolbarItem.WAYPOINTS, ToolbarItem.MINIMAP -> Unit
-
         ToolbarItem.HOME -> ToolbarIcon(XnotesIcons.prev, stringResource(R.string.toolbar_home)) { onOpenBackstage() }
-        // A name has no room down a side rail.
-        ToolbarItem.TITLE -> if (!LocalBar.current.vertical) Tooltip(stringResource(R.string.rename_note)) {
-            Label(
-                if (editor.state.document.displayName == null && editor.state.document.path == null) stringResource(R.string.untitled) else editor.title,
-                modifier = Modifier
-                    .widthIn(max = 160.dp)
-                    .clip(MaterialTheme.shapes.extraSmall)
-                    .clickable { onRename() },
-            )
-        }
-        ToolbarItem.SIDEBAR ->
-            ToolbarIcon(XnotesIcons.sidebar, stringResource(R.string.side_panel), active = editor.sidebarVisible, shortcut = Keys.SIDEBAR) { editor.toggleSidebar() }
+        ToolbarItem.TITLE -> Unit
+        ToolbarItem.SIDEBAR -> ToolbarIcon(XnotesIcons.sidebar, stringResource(R.string.side_panel), active = editor.sidebarVisible, shortcut = Keys.SIDEBAR) { editor.toggleSidebar() }
 
         ToolbarItem.PEN, ToolbarItem.DASHED, ToolbarItem.CALLIGRAPHY, ToolbarItem.SPEED,
         ToolbarItem.TAPER, ToolbarItem.HIGHLIGHTER, ToolbarItem.ERASER, ToolbarItem.PAN,
@@ -218,7 +511,6 @@ private fun ToolbarItemView(
             if (tool != null) ToolButton(editor, tool, toolIcons[tool], configForTool, setConfigForTool)
         }
 
-        // Marks a PDF's text, so a note without a PDF has no use for it.
         ToolbarItem.MARKUP ->
             if (editor.hasPdf) ToolButton(editor, Tool.MARKUP, toolIcons[Tool.MARKUP], configForTool, setConfigForTool)
 
@@ -232,51 +524,9 @@ private fun ToolbarItemView(
         ToolbarItem.UNDO -> ToolbarIcon(XnotesIcons.undo, stringResource(R.string.undo), enabled = editor.canUndo, shortcut = Keys.UNDO) { editor.undo() }
         ToolbarItem.REDO -> ToolbarIcon(XnotesIcons.redo, stringResource(R.string.redo), enabled = editor.canRedo, shortcut = Keys.REDO) { editor.redo() }
 
-        ToolbarItem.PAGE_NAV -> {
-            ToolbarIcon(XnotesIcons.prev, stringResource(R.string.previous_page), shortcut = Keys.PREV_PAGE) { editor.prevPage() }
-            var jumpOpen by remember { mutableStateOf(false) }
-            Box {
-                Tooltip(stringResource(R.string.title_go_to_page)) {
-                    PageCounter(
-                        editor.pageIndex + 1,
-                        editor.pageCount,
-                        Modifier
-                            .clip(MaterialTheme.shapes.extraSmall)
-                            .clickable { jumpOpen = true },
-                    )
-                }
-                if (jumpOpen) PageJumpPopup(editor) { jumpOpen = false }
-            }
-            ToolbarIcon(XnotesIcons.next, stringResource(R.string.next_page), shortcut = Keys.NEXT_PAGE) { editor.nextPage() }
-        }
-        ToolbarItem.STYLES -> StylesButton(editor, onImportTemplate)
-        ToolbarItem.MARGINS -> MarginsButton(editor)
-        ToolbarItem.VIEW -> ViewButton(editor)
-
-        ToolbarItem.ZOOM -> {
-            ToolbarIcon(XnotesIcons.zoomOut, stringResource(R.string.zoom_out), enabled = !editor.zoomLocked, shortcut = Keys.ZOOM_OUT) { editor.zoomOut() }
-            var zoomMenuOpen by remember { mutableStateOf(false) }
-            Box {
-                Tooltip(stringResource(R.string.title_zoom)) {
-                    Label(
-                        "${editor.zoomPercent}%",
-                        modifier = Modifier
-                            .clip(MaterialTheme.shapes.extraSmall)
-                            .clickable { zoomMenuOpen = true },
-                    )
-                }
-                if (zoomMenuOpen) ZoomMenuPopup(editor) { zoomMenuOpen = false }
-            }
-            ToolbarIcon(XnotesIcons.zoomIn, stringResource(R.string.zoom_in), enabled = !editor.zoomLocked, shortcut = Keys.ZOOM_IN) { editor.zoomIn() }
-        }
-        ToolbarItem.FIT -> FitMenu(editor)
-        ToolbarItem.ZOOM_LOCK -> ToolbarIcon(
-            if (editor.zoomLocked) XnotesIcons.lock else XnotesIcons.unlock,
-            stringResource(if (editor.zoomLocked) R.string.unlock_zoom else R.string.lock_zoom),
-            active = editor.zoomLocked,
-        ) { editor.toggleZoomLock() }
-
-        ToolbarItem.FULLSCREEN -> ToolbarIcon(XnotesIcons.fullscreen, stringResource(R.string.toolbar_fullscreen), shortcut = Keys.FULLSCREEN) { onToggleFullscreen() }
+        ToolbarItem.PAGE_NAV, ToolbarItem.STYLES, ToolbarItem.MARGINS,
+        ToolbarItem.VIEW, ToolbarItem.ZOOM, ToolbarItem.FIT,
+        ToolbarItem.ZOOM_LOCK, ToolbarItem.FULLSCREEN -> Unit
 
         ToolbarItem.COLORS -> editor.toolbarColors.take(editor.toolbarColorCount).forEachIndexed { i, color ->
             Box {
@@ -292,6 +542,7 @@ private fun ToolbarItemView(
         }
     }
 }
+
 
 /** A stroke/edit tool button: arms the tool, and re-clicking an armed config tool opens its popup. */
 @Composable

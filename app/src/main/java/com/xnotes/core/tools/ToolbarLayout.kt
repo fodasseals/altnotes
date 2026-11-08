@@ -184,21 +184,28 @@ data class ToolbarLayout(val sections: List<ToolbarSection>) {
 
         /** Mirrors the hardcoded bar exactly (see Toolbar.kt) so existing users see no change. */
         val DEFAULT: ToolbarLayout = of(
-            listOf(ToolbarItem.HOME, ToolbarItem.TITLE),
-            listOf(ToolbarItem.SIDEBAR),
             listOf(
-                ToolbarItem.PEN, ToolbarItem.DASHED, ToolbarItem.CALLIGRAPHY, ToolbarItem.SPEED,
-                ToolbarItem.TAPER, ToolbarItem.HIGHLIGHTER, ToolbarItem.ERASER,
+                ToolbarItem.PEN,
+                ToolbarItem.HIGHLIGHTER,
+                ToolbarItem.ERASER,
+                ToolbarItem.SELECT,
             ),
-            listOf(ToolbarItem.PAN, ToolbarItem.SELECT, ToolbarItem.LASSO, ToolbarItem.INSERT_SPACE, ToolbarItem.SCREENSHOT),
-            listOf(ToolbarItem.WAND, ToolbarItem.TAPE, ToolbarItem.SHAPE, ToolbarItem.RULER, ToolbarItem.TEXT, ToolbarItem.TEXT_BOX, ToolbarItem.MARKUP),
-            listOf(ToolbarItem.IMAGE),
             listOf(ToolbarItem.COLORS),
             listOf(ToolbarItem.UNDO, ToolbarItem.REDO),
-            listOf(ToolbarItem.PAGE_NAV, ToolbarItem.STYLES, ToolbarItem.MARGINS, ToolbarItem.VIEW),
-            listOf(ToolbarItem.ZOOM, ToolbarItem.FIT, ToolbarItem.ZOOM_LOCK),
-            listOf(ToolbarItem.FULLSCREEN),
+            listOf(
+                ToolbarItem.TEXT,
+                ToolbarItem.TEXT_BOX,
+                ToolbarItem.MARKUP,
+                ToolbarItem.SHAPE,
+                ToolbarItem.TAPE,
+                ToolbarItem.WAND,
+                ToolbarItem.INSERT_SPACE,
+                ToolbarItem.SCREENSHOT,
+                ToolbarItem.RULER,
+                ToolbarItem.IMAGE,
+            ),
         )
+
 
         /** Mirrors the hardcoded canvas bar (see InfiniteToolbar.kt). */
         val CANVAS_DEFAULT: ToolbarLayout = of(
