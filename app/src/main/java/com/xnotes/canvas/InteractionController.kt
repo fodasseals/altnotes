@@ -243,6 +243,9 @@ class InteractionController(
 
     /** When true, the side-button tool also runs off the hover stream (no contact needed); eraser/pan only. */
     var penButtonHover: Boolean = false
+    var mouseRightButton: String = "pan"
+var mouseMiddleButton: String = "pan"
+var onMouseAction: ((String) -> Unit)? = null
 
     /** The side-button tool currently running off the hover stream, or null when no hover gesture is live. */
     private var hoverActionTool: Tool? = null
@@ -746,9 +749,40 @@ class InteractionController(
     /** Some pens report the side button only on the hovering generic-motion stream
      *  (ACTION_BUTTON_PRESS/RELEASE), never in the touch buttonState. Latch it here; a release
      *  here also ends an in-progress hover gesture even if the pen has not moved. */
-    fun onGenericMotion(e: MotionEvent) {
-        if (stylusButtons.onGenericMotion(e) && hoverActionTool != null) endHoverAction()
+fun onGenericMotion(e: MotionEvent) {
+    if (stylusButtons.onGenericMotion(e) && hoverActionTool != null) endHoverAction()
+    if (e.actionMasked == MotionEvent.ACTION_SCROLL) {
+        val vScroll = e.getAxisValue(MotionEvent.AXIS_VSCROLL).toDouble()
+        val hScroll = e.getAxisValue(MotionEvent.AXIS_HSCROLL).toDouble()
+        if (vScroll != 0.0 || hScroll != 0.0) {
+            val ctrl = (e.metaState and KeyEvent.META_CTRL_ON) != 0
+            if (ctrl && vScroll != 0.0) {
+                if (!state.zoomLocked) {
+                    val mouseVp = Pt(e.x.toDouble(), e.y.toDouble())
+                    val anchor = state.viewportToContent(mouseVp)
+                    val factor = Math.pow(1.15, vScroll)
+                    val newZoom = (state.zoom * factor).coerceIn(state.minZoom, state.maxZoom)
+                    state.fitWidthActive = false
+                    state.fitHeightActive = false
+                    state.zoom = newZoom
+                    if (pinchPanAllowed()) {
+                        state.scrollX = anchor.x * newZoom - mouseVp.x
+                        state.scrollY = anchor.y * newZoom - mouseVp.y
+                        state.clampScroll()
+                    }
+                    state.invalidateCachesForZoom()
+                    onViewChanged()
+                    requestRender()
+                }
+            } else {
+                val step = 64.0 * state.devicePxPerDp
+                state.scrollBy(-hScroll * step, -vScroll * step)
+                onViewChanged()
+                requestRender()
+            }
+        }
     }
+}
 
     /** Feeder C: Bluetooth/USI pens often deliver the side button only as a KeyEvent, never in any
      *  MotionEvent buttonState. Latch those ([down] true on key-down); a key-up also ends a live
@@ -781,8 +815,40 @@ class InteractionController(
         //  - the stylus eraser end, or the held side button, force the eraser/side-button tool;
         //  - a finger pans unless finger-draw is enabled;
         //  - otherwise the armed tool.
-        val buttonHeld = stylusButtons.heldFor(e)
-        val effectiveTool: Tool = when {
+val isMouse = toolType == MotionEvent.TOOL_TYPE_MOUSE
+val mouseBtnAction: String? = if (isMouse) {
+    when {
+        (e.buttonState and MotionEvent.BUTTON_TERTIARY) != 0 -> mouseMiddleButton
+        (e.buttonState and MotionEvent.BUTTON_SECONDARY) != 0 -> mouseRightButton
+        else -> null
+    }
+} else null
+if (mouseBtnAction != null) {
+    when (mouseBtnAction) {
+        "none" -> { mode = PointerMode.IDLE; return }
+        "undo", "redo", "toggle_previous" -> {
+            mode = PointerMode.IDLE
+            onMouseAction?.invoke(mouseBtnAction)
+            return
+        }
+        "context_menu" -> {
+            val pageIndex = state.pageIndexAtContent(content)
+            val hit = if (pageIndex != null) {
+                val local = state.toPageSpace(pageIndex, content)
+                state.document.pages[pageIndex].items.lastOrNull { it.contains(local) }
+            } else null
+            mode = PointerMode.IDLE
+            onContextMenu(Pt(vx, vy), content, hit?.takeIf { it.locked })
+            return
+        }
+    }
+}
+val buttonHeld = !isMouse && stylusButtons.heldFor(e)
+val effectiveTool: Tool = when {
+    mouseBtnAction == "pan" -> Tool.PAN
+    mouseBtnAction == "eraser" -> Tool.ERASER
+    mouseBtnAction == "select" -> Tool.SELECT
+    mouseBtnAction == "lasso" -> Tool.LASSO
             toolType == MotionEvent.TOOL_TYPE_ERASER -> Tool.ERASER
             buttonHeld && penButtonTool != null -> penButtonTool!!
             // While something is selected, the stylus grabs that selection (resize on a handle,

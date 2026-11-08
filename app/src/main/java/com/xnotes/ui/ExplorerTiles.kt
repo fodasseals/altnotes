@@ -53,6 +53,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -140,6 +144,7 @@ internal class ExplorerBody(
     val whereOf: ((BrowseEntry) -> String?)? = null,
 ) {
     val zone: ZoneId = ZoneId.systemDefault()
+    var rightClickedUri by mutableStateOf<String?>(null)
 
     /** How many of the folder's own items show under [restLabel]. */
     val restCount: Int get() = folders.size + groups.sumOf { it.items.size }
@@ -257,7 +262,10 @@ private fun EntryMenuButton(b: ExplorerBody, e: BrowseEntry, tint: Color, size: 
                 Icon(XnotesIcons.more, stringResource(R.string.more_for, b.label(e)), tint = tint, modifier = Modifier.size(17.dp))
             }
         }
-        EntryMenuFor(b, e, open) { open = false }
+EntryMenuFor(b, e, open || b.rightClickedUri == e.documentUri) {
+    open = false
+    if (b.rightClickedUri == e.documentUri) b.rightClickedUri = null
+}
     }
 }
 
@@ -287,7 +295,21 @@ internal fun EntryMenuFor(b: ExplorerBody, e: BrowseEntry, expanded: Boolean, on
 @Composable
 private fun Modifier.registered(b: ExplorerBody, e: BrowseEntry): Modifier {
     DisposableEffect(e.documentUri) { onDispose { b.host.onPlaced(e, null) } }
-    return this.onPlaced { b.host.onPlaced(e, it) }
+    return this
+        .onPlaced { b.host.onPlaced(e, it) }
+        .pointerInput(b, e.documentUri) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                        event.changes.forEach { it.consume() }
+                        b.rightClickedUri = e.documentUri
+                    } else if (event.type == PointerEventType.Release && b.rightClickedUri == e.documentUri) {
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            }
+        }
 }
 
 /** A file in the grid: the outlined thumbnail with its badges, and under it, outside the outline, the name, date and ⋮. */

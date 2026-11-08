@@ -57,6 +57,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
@@ -220,7 +224,18 @@ fun PreferencesPane(
         Spacer(Modifier.height(12.dp))
         Column(
             // Ending at the keyboard's edge scrolls a focused field up out from under it.
-            Modifier.fillMaxSize().imePadding().verticalScroll(scrollState)
+Modifier.fillMaxSize().imePadding().verticalScroll(scrollState)
+    .pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val ev = awaitPointerEvent(PointerEventPass.Initial)
+                if (ev.type == PointerEventType.Scroll) {
+                    val dy = ev.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                    if (dy != 0f) scrollState.dispatchRawDelta(dy * 64.dp.toPx())
+                }
+            }
+        }
+    }
                 .onGloballyPositioned { viewport = it.boundsInRoot() },
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -338,6 +353,22 @@ fun PreferencesPane(
                 }
             }
             CheckRow(stringResource(R.string.pref_volume_keys_turn_pages), prefs.volumeKeysTurnPages) { update(prefs.copy(volumeKeysTurnPages = it)) }
+            val mouseButtonOptions = listOf(
+    "pan" to stringResource(R.string.tool_pan),
+    "eraser" to stringResource(R.string.tool_eraser),
+    "select" to stringResource(R.string.tool_select),
+    "lasso" to stringResource(com.xnotes.core.tools.Tool.LASSO.labelRes),
+    "context_menu" to "Menu de colar / opções",
+    "undo" to stringResource(R.string.undo),
+    "redo" to stringResource(R.string.redo),
+    "toggle_previous" to stringResource(R.string.toggle_previous),
+    "none" to stringResource(R.string.none),
+)
+FieldLabel("Botão direito do mouse (na nota aberta)")
+OptionDropdown(mouseButtonOptions, prefs.mouseRightButton) { update(prefs.copy(mouseRightButton = it)) }
+FieldLabel("Botão do meio / Scroll clicado (na nota aberta)")
+OptionDropdown(mouseButtonOptions, prefs.mouseMiddleButton) { update(prefs.copy(mouseMiddleButton = it)) }
+
 
             HorizontalDivider(color = palette.border.toComposeColor())
             SectionTitle(stringResource(R.string.pref_new_notes))

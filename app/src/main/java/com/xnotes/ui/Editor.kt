@@ -2789,6 +2789,9 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
         flowText.highlight = { toolbarInk() }
         controller.penButtonTool = if (p.penButtonTool == "none") null else (Tool.fromId(p.penButtonTool) ?: Tool.ERASER)
         controller.penButtonHover = p.penButtonHover
+        controller.mouseRightButton = p.mouseRightButton
+controller.mouseMiddleButton = p.mouseMiddleButton
+controller.onMouseAction = { act -> dispatchTapGesture(act) }
         state.sideMargin = p.sideMargin
         state.pageBorders = !p.hidePageBorders
         state.maxCachePx = p.maxCacheResolution.toDouble()

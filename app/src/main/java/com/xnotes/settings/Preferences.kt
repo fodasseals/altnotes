@@ -44,6 +44,8 @@ data class Preferences(
     val penButtonTool: String = "eraser",
     /** Whether the side-button tool also activates during hover (no contact needed); eraser/pan only. */
     val penButtonHover: Boolean = false,
+    val mouseRightButton: String = "pan",
+    val mouseMiddleButton: String = "pan",
     /** Action mapped to a clean two-finger tap; "none" (default) disables it. */
     val twoFingerTap: String = "none",
     /** Action mapped to a clean three-finger tap; "none" (default) disables it. */
@@ -141,6 +143,8 @@ data class Preferences(
         .put("detect_shapes", detectShapes)
         .put("pen_button_tool", penButtonTool)
         .put("pen_button_hover", penButtonHover)
+        .put("mouse_right_button", mouseRightButton)
+        .put("mouse_middle_button", mouseMiddleButton)
         .put("two_finger_tap", twoFingerTap)
         .put("three_finger_tap", threeFingerTap)
         .put("stylus_double_tap", stylusDoubleTap)
@@ -262,6 +266,8 @@ data class Preferences(
                 detectShapes = o.optBoolean("detect_shapes", true),
                 penButtonTool = o.optString("pen_button_tool", "eraser").ifEmpty { "eraser" },
                 penButtonHover = o.optBoolean("pen_button_hover", false),
+                mouseRightButton = o.optString("mouse_right_button", "pan").ifEmpty { "pan" },
+                mouseMiddleButton = o.optString("mouse_middle_button", "pan").ifEmpty { "pan" },
                 twoFingerTap = tapAction("two_finger_tap"),
                 threeFingerTap = tapAction("three_finger_tap"),
                 stylusDoubleTap = tapAction("stylus_double_tap"),

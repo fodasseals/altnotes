@@ -102,6 +102,9 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -746,7 +749,18 @@ private fun PinnedCommand(label: String, selected: Boolean, onClick: () -> Unit,
                 .fillMaxWidth()
                 .height(48.dp)
                 .then(if (selected) Modifier.background(palette.selectionBackground.toComposeColor()) else Modifier)
-                .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
+.pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val ev = awaitPointerEvent(PointerEventPass.Initial)
+            if (ev.type == PointerEventType.Press && ev.buttons.isSecondaryPressed) {
+                ev.changes.forEach { it.consume() }
+                menuOpen = true
+            }
+        }
+    }
+}
+.combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
                 .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1546,9 +1560,74 @@ var onDashboard by remember { mutableStateOf(true) }
                 // tiles' clickable for the long-press because a child consuming it (consumeUntilUp) would
                 // starve this ancestor, so this is a hand-rolled long-press that hit-tests the file tiles
                 // and consumes in the Initial pass (ahead of the tiles) to claim the gesture cleanly.
-                .pointerInput(root) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+.pointerInput(layout) {
+    awaitPointerEventScope {
+        while (true) {
+            val ev = awaitPointerEvent(PointerEventPass.Initial)
+            if (ev.type == PointerEventType.Scroll) {
+                val dy = ev.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                if (dy != 0f) {
+                    val step = 64.dp.toPx()
+                    scope.launch { scrollNow.value.scrollBy(dy * step) }
+                }
+            }
+        }
+    }
+}
+.pointerInput(root) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (currentEvent.buttons.isSecondaryPressed) return@awaitEachGesture
+        if (down.type == PointerType.Mouse) {
+            val winDown = boxCoords?.localToWindow(down.position) ?: return@awaitEachGesture
+            val hitSelectedFile = fileSpots.entries.firstOrNull {
+                it.value.isAttached && it.value.boundsInWindow().contains(winDown)
+            }?.key?.let { uri -> selection.any { it.documentUri == uri } && selection.none { it.isDir } } == true
+            if (!hitSelectedFile) {
+                var draggingSelect = false
+                val initialSelection = selection.toList()
+                while (true) {
+                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                    val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!c.pressed) {
+                        if (draggingSelect) c.consume()
+                        break
+                    }
+                    if (!draggingSelect && (c.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                        draggingSelect = true
+                        renaming = null
+                        opError = null
+                    }
+                    if (draggingSelect) {
+                        c.consume()
+                        val winNow = boxCoords?.localToWindow(c.position) ?: continue
+                        val rect = androidx.compose.ui.geometry.Rect(
+                            minOf(winDown.x, winNow.x),
+                            minOf(winDown.y, winNow.y),
+                            maxOf(winDown.x, winNow.x),
+                            maxOf(winDown.y, winNow.y),
+                        )
+                        val allEntries = (filesNow.value + pinnedNow.value + timeline?.files.orEmpty()).distinctBy { it.documentUri }
+                        val hitUris = HashSet<String>()
+                        folderSpots.forEach { (uri, coords) ->
+                            if (coords.isAttached && coords.boundsInWindow().overlaps(rect)) hitUris.add(uri)
+                        }
+                        fileSpots.forEach { (uri, coords) ->
+                            if (coords.isAttached && coords.boundsInWindow().overlaps(rect)) hitUris.add(uri)
+                        }
+                        val nextSel = initialSelection.toMutableList()
+                        for (entry in allEntries) {
+                            if (entry.documentUri in hitUris && nextSel.none { it.documentUri == entry.documentUri }) {
+                                nextSel.add(entry)
+                            }
+                        }
+                        selection.clear()
+                        selection.addAll(nextSel)
+                    }
+                }
+                return@awaitEachGesture
+            }
+        }
                         // Long-press gate: only a held, near-stationary single finger qualifies. A quick
                         // lift (tap), an early move (scroll) or a second finger (pinch) returns from the
                         // timeout normally so the body keeps those; holding past it throws, which is the signal.
