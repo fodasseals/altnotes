@@ -325,8 +325,9 @@ class Editor(context: Context, val pane: Pane = Pane.PRIMARY) : ToolPopupHost, S
     /** Whether the window runs in fullscreen. Persisted via [Preferences.startFullscreen]; when unset
      *  it defaults to on unless the display has a camera cutout. The activity observes this and drives
      *  the window. */
-    var fullscreen by mutableStateOf(settings.prefs.startFullscreen ?: !deviceHasDisplayCutout)
+    var fullscreen by mutableStateOf(true)
         private set
+    var inAppFullscreen by mutableStateOf(false)
 
     /** Prepares one of the shared temp dirs. The launch purge drops temps orphaned by a crash, which
      *  is safe for the primary editor because no real note is open yet at construction. A secondary
@@ -2834,19 +2835,20 @@ controller.onMouseAction = { act -> dispatchTapGesture(act) }
     /** Set fullscreen and persist it as an explicit choice (used by the toolbar, F11, and the
      *  Preferences toggle); lightweight, no canvas refresh. */
     fun setFullscreenPref(v: Boolean) {
-        fullscreen = v
-        settings = settings.copy(prefs = settings.prefs.copy(startFullscreen = v))
-        settingsRepo.save(settings)
+        fullscreen = true
+        inAppFullscreen = v
     }
 
-    fun toggleFullscreen() = setFullscreenPref(!fullscreen)
+    fun toggleFullscreen() {
+        inAppFullscreen = !inAppFullscreen
+    }
 
     /** Apply edited preferences live and persist (used by the Preferences dialog). */
     fun applyPreferences(p: Preferences) {
         val marginChanged = p.sideMargin != settings.prefs.sideMargin
         settings = settings.copy(prefs = p)
         for (editor in listOfNotNull(this, sibling)) {
-            editor.fullscreen = p.startFullscreen ?: !editor.deviceHasDisplayCutout
+            editor.fullscreen = true
             editor.applyPagePrefsToState(p)
             editor.republishFlow(invalidate = true)
             editor.state.invalidateAllCaches()

@@ -1,6 +1,23 @@
 package com.xnotes.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.RadioButton
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke as ComposeStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -88,25 +105,35 @@ import kotlin.math.roundToInt
  * TIP WIDTH PERCENTAGE (taper pen), then WIDTH, and a NEON toggle (with INTENSITY) on
  * any stroke tool but the highlighter.
  */
+private var savedHighlighterSquareTip: Boolean = true
+private var savedHighlighterFitText: Boolean = false
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ToolConfigPopup(editor: ToolPopupHost, tool: Tool, onDismiss: () -> Unit) {
-    val base = remember { editor.toolConfig(tool) }
-    var pressure by remember { mutableStateOf(base.pressureEnabled) }
-    var sensitivity by remember { mutableStateOf(ToolConversions.minFactorToSensitivity(base.pressureMinFactor).toFloat()) }
-    var multiplier by remember { mutableStateOf(ToolConversions.directionStrengthToMultiplier(base.directionStrength).toFloat()) }
-    var speed by remember { mutableStateOf(ToolConversions.strengthToSpeed(base.speedStrength).toFloat()) }
-    var taperTip by remember { mutableStateOf((base.taperMinFactor * 100).toFloat()) }
-    var width by remember { mutableStateOf(base.baseWidth.toFloat()) }
-    var glow by remember { mutableStateOf(base.neon) }
-    var glowIntensity by remember { mutableStateOf(ToolConversions.neonStrengthToIntensity(base.neonStrength).toFloat()) }
-    var dashLen by remember { mutableStateOf(base.dashLength.toFloat()) }
-    var gapLen by remember { mutableStateOf(base.dashGap.toFloat()) }
-    var straight by remember { mutableStateOf(base.straightLine) }
-    var scale by remember { mutableStateOf(base.scale) }
-    var intensity by remember { mutableStateOf(ToolConversions.highlighterAlphaToIntensity(base.highlighterAlpha).toFloat()) }
-    var inverse by remember { mutableStateOf(base.highlighterInverse) }
-    var colorOverride by remember { mutableStateOf(base.colorOverride) }
+fun ToolConfigPopup(
+    editor: ToolPopupHost,
+    tool: Tool,
+    onSelectPen: ((Tool) -> Unit)? = null,
+    onDismiss: () -> Unit,
+) {
+    val base = remember(tool) { editor.toolConfig(tool) }
+    var pressure by remember(tool) { mutableStateOf(base.pressureEnabled) }
+    var sensitivity by remember(tool) { mutableStateOf(ToolConversions.minFactorToSensitivity(base.pressureMinFactor).toFloat()) }
+    var multiplier by remember(tool) { mutableStateOf(ToolConversions.directionStrengthToMultiplier(base.directionStrength).toFloat()) }
+    var speed by remember(tool) { mutableStateOf(ToolConversions.strengthToSpeed(base.speedStrength).toFloat()) }
+    var taperTip by remember(tool) { mutableStateOf((base.taperMinFactor * 100).toFloat()) }
+    var width by remember(tool) { mutableStateOf(base.baseWidth.toFloat()) }
+    var glow by remember(tool) { mutableStateOf(base.neon) }
+    var glowIntensity by remember(tool) { mutableStateOf(ToolConversions.neonStrengthToIntensity(base.neonStrength).toFloat()) }
+    var dashLen by remember(tool) { mutableStateOf(base.dashLength.toFloat()) }
+    var gapLen by remember(tool) { mutableStateOf(base.dashGap.toFloat()) }
+    var straight by remember(tool) { mutableStateOf(base.straightLine) }
+    var scale by remember(tool) { mutableStateOf(base.scale) }
+    var intensity by remember(tool) { mutableStateOf(ToolConversions.highlighterAlphaToIntensity(base.highlighterAlpha).toFloat()) }
+    var inverse by remember(tool) { mutableStateOf(base.highlighterInverse) }
+    var colorOverride by remember(tool) { mutableStateOf(base.colorOverride) }
+    var squareTip by remember { mutableStateOf(savedHighlighterSquareTip) }
+    var fitText by remember { mutableStateOf(savedHighlighterFitText) }
 
     fun emit() {
         val m = ToolConversions.sensitivityToMinFactor(sensitivity.toDouble())
@@ -136,14 +163,166 @@ fun ToolConfigPopup(editor: ToolPopupHost, tool: Tool, onDismiss: () -> Unit) {
         )
     }
 
+    val palette = LocalPalette.current
+    val activeInk = colorOverride
+        ?: editor.hostToolbarColors.getOrNull(editor.hostActiveColorIndex)
+        ?: Rgba(255, 214, 0, 255)
+    val strokePens = remember { listOf(Tool.SPEED, Tool.CALLIGRAPHY, Tool.PEN, Tool.DASHED, Tool.TAPER) }
+    val isPenMenu = tool in strokePens
+
     DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
-        Column(Modifier.width(250.dp).padding(horizontal = 14.dp, vertical = 8.dp)) {
-            PopupTitle(stringResource(tool.labelRes))
-            // COLOUR override: "Default" follows the toolbar's active ink colour; pick a hue to pin
-            // this tool to it regardless of the toolbar selection.
+        Column(
+            modifier = Modifier
+                .width(316.dp)
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            // Cabeçalho com título e botão X estilo Samsung Notes
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = when (tool) {
+                        Tool.SPEED -> "Caneta-tinteiro"
+                        Tool.CALLIGRAPHY -> "Caneta caligráfica"
+                        Tool.PEN -> "Caneta"
+                        Tool.DASHED -> "Lápis / Tracejada"
+                        Tool.TAPER -> "Pincel caligráfico"
+                        Tool.HIGHLIGHTER -> if (squareTip) "Marca-texto (Ponta quadrada)" else "Marca-texto (Ponta redonda)"
+                        else -> stringResource(tool.labelRes)
+                    },
+                    color = palette.text.toComposeColor(),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(palette.surface.toComposeColor())
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        XnotesIcons.close,
+                        contentDescription = "Fechar",
+                        tint = palette.textDim.toComposeColor(),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Mostruário visual animado (5 Canetas ou 2 Marca-textos)
+            if (isPenMenu) {
+                SamsungPenRack(
+                    selectedTool = tool,
+                    inkColor = activeInk.toComposeColor(),
+                    onSelect = { picked -> onSelectPen?.invoke(picked) },
+                )
+                HorizontalDivider(color = palette.border.toComposeColor())
+                Spacer(Modifier.height(10.dp))
+            } else if (tool == Tool.HIGHLIGHTER) {
+                SamsungHighlighterRack(
+                    squareTip = squareTip,
+                    inkColor = activeInk.toComposeColor(),
+                    onSelectSquare = { isSquare ->
+                        squareTip = isSquare
+                        savedHighlighterSquareTip = isSquare
+                        emit()
+                    },
+                )
+                HorizontalDivider(color = palette.border.toComposeColor())
+                Spacer(Modifier.height(10.dp))
+            }
+
+            // Controle de Espessura estilo Samsung Notes (- Slider +)
+            val range = ToolConversions.widthRange(tool)
+            SamsungSliderRow(
+                label = stringResource(R.string.caption_width),
+                value = width,
+                range = range.start.toFloat()..range.endInclusive.toFloat(),
+                accentColor = activeInk.toComposeColor(),
+                onChange = { width = it; emit() },
+            )
+
+            // Se for Marca-texto: Opacidade (- Slider +) e chaves estilo Samsung Notes
+            if (tool == Tool.HIGHLIGHTER) {
+                Spacer(Modifier.height(4.dp))
+                SamsungSliderRow(
+                    label = stringResource(R.string.caption_intensity),
+                    value = intensity,
+                    range = 10f..100f,
+                    accentColor = activeInk.toComposeColor(),
+                    onChange = { intensity = it; emit() },
+                )
+                Spacer(Modifier.height(6.dp))
+                ToggleRow("Endireitar as linhas", straight) { straight = it; emit() }
+                ToggleRow("Ajustar a espessura ao texto", fitText) {
+                    fitText = it
+                    savedHighlighterFitText = it
+                    if (it) {
+                        width = 22f.coerceIn(range.start.toFloat(), range.endInclusive.toFloat())
+                    }
+                    emit()
+                }
+                ToggleRow(stringResource(R.string.caption_scale), scale) { scale = it; emit() }
+                ToggleRow(stringResource(R.string.caption_inverse), inverse) { inverse = it; emit() }
+            }
+
+            // Controles exclusivos das Canetas do xnotes
+            if (isPenMenu) {
+                Spacer(Modifier.height(4.dp))
+                if (tool == Tool.CALLIGRAPHY) {
+                    SliderRow(stringResource(R.string.caption_multiplier), multiplier, 1f..5f) { multiplier = it; emit() }
+                }
+                if (tool == Tool.SPEED) {
+                    SliderRow(stringResource(R.string.caption_speed), speed, 0f..100f) { speed = it; emit() }
+                }
+                if (tool == Tool.TAPER) {
+                    SliderRow(stringResource(R.string.caption_tip_width), taperTip, 0f..100f) { taperTip = it; emit() }
+                }
+                if (tool == Tool.DASHED) {
+                    SliderRow(stringResource(R.string.caption_dash), dashLen, 2f..40f) { dashLen = it; emit() }
+                    SliderRow(stringResource(R.string.caption_gap), gapLen, 2f..40f) { gapLen = it; emit() }
+                }
+                val hasPressure = tool == Tool.PEN || tool == Tool.CALLIGRAPHY || tool == Tool.SPEED || tool == Tool.TAPER
+                if (hasPressure) {
+                    ToggleRow(stringResource(R.string.caption_pressure), pressure) { pressure = it; emit() }
+                    if (pressure) {
+                        SliderRow(stringResource(R.string.caption_sensitivity), sensitivity, 0f..100f, enabled = pressure) { sensitivity = it; emit() }
+                    }
+                }
+                ToggleRow(stringResource(R.string.caption_scale), scale) { scale = it; emit() }
+                if (tool != Tool.DASHED) {
+                    ToggleRow(stringResource(R.string.caption_neon), glow) { glow = it; emit() }
+                    if (glow) {
+                        SliderRow(stringResource(R.string.caption_glow_intensity), glowIntensity, 0f..100f) { glowIntensity = it; emit() }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
             StyleCaption(stringResource(R.string.caption_colour))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ModeChip(stringResource(R.string.default_choice), colorOverride == null) { colorOverride = null; emit() }
+            Spacer(Modifier.height(6.dp))
+
+            // Fileira de círculos de cores estilo Samsung Notes + Seletor Espectro
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                editor.hostToolbarColors.take(editor.hostToolbarColorCount).forEachIndexed { idx, c ->
+                    val isSelected = (colorOverride == null && idx == editor.hostActiveColorIndex) || colorOverride == c
+                    ColorDot(c.toComposeColor(), selected = isSelected) {
+                        colorOverride = null
+                        (editor as? Editor)?.pickColor(idx)
+                        emit()
+                    }
+                }
                 ColorPickerDot(
                     colorOverride,
                     custom = colorOverride != null,
@@ -151,54 +330,334 @@ fun ToolConfigPopup(editor: ToolPopupHost, tool: Tool, onDismiss: () -> Unit) {
                     dismissOnPick = false,
                 ) { d, p ->
                     ColorPickerPopup(
-                        initial = colorOverride ?: editor.hostToolbarColors.getOrNull(editor.hostActiveColorIndex),
+                        initial = activeInk,
                         recents = editor.hostRecentColors,
                         onDismiss = d,
                         onPick = p,
                     )
                 }
             }
-            Spacer(Modifier.size(12.dp))
-            val hasPressure = tool == Tool.PEN || tool == Tool.CALLIGRAPHY || tool == Tool.SPEED || tool == Tool.TAPER
-            if (hasPressure) {
-                ToggleRow(stringResource(R.string.caption_pressure), pressure) { pressure = it; emit() }
-                SliderRow(stringResource(R.string.caption_sensitivity), sensitivity, 0f..100f, enabled = pressure) { sensitivity = it; emit() }
+        }
+    }
+}
+
+/** Barra deslizante com botões '-' e '+' e indicador numérico estilo Samsung Notes. */
+@Composable
+private fun SamsungSliderRow(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    accentColor: Color,
+    onChange: (Float) -> Unit,
+) {
+    val palette = LocalPalette.current
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = palette.textDim.toComposeColor(), fontSize = 12.sp)
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(palette.surface.toComposeColor())
+                    .border(1.dp, palette.border.toComposeColor(), CircleShape)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    text = "${value.roundToInt()}",
+                    color = palette.text.toComposeColor(),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                )
             }
-            if (tool == Tool.CALLIGRAPHY) {
-                SliderRow(stringResource(R.string.caption_multiplier), multiplier, 1f..5f) { multiplier = it; emit() }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable { onChange((value - 1f).coerceIn(range.start, range.endInclusive)) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("−", color = palette.text.toComposeColor(), fontSize = 20.sp)
             }
-            if (tool == Tool.SPEED) {
-                SliderRow(stringResource(R.string.caption_speed), speed, 0f..100f) { speed = it; emit() }
+            Slider(
+                value = value,
+                onValueChange = onChange,
+                valueRange = range,
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable { onChange((value + 1f).coerceIn(range.start, range.endInclusive)) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+", color = palette.text.toComposeColor(), fontSize = 20.sp)
             }
-            if (tool == Tool.TAPER) {
-                SliderRow(stringResource(R.string.caption_tip_width), taperTip, 0f..100f) { taperTip = it; emit() }
-            }
-            val range = ToolConversions.widthRange(tool)
-            SliderRow(stringResource(R.string.caption_width), width, range.start.toFloat()..range.endInclusive.toFloat()) { width = it; emit() }
-            // SCALE off: ink keeps a constant on-screen thickness whatever zoom you draw at.
-            ToggleRow(stringResource(R.string.caption_scale), scale) { scale = it; emit() }
-            if (tool == Tool.DASHED) {
-                SliderRow(stringResource(R.string.caption_dash), dashLen, 2f..40f) { dashLen = it; emit() }
-                SliderRow(stringResource(R.string.caption_gap), gapLen, 2f..40f) { gapLen = it; emit() }
-            }
-            // The highlighter's strength (translucency) and an optional straight-segment lock
-            // (for ruling/underlining).
-            if (tool == Tool.HIGHLIGHTER) {
-                SliderRow(stringResource(R.string.caption_intensity), intensity, 10f..100f) { intensity = it; emit() }
-                ToggleRow(stringResource(R.string.caption_straight_line), straight) { straight = it; emit() }
-                // INVERSE swaps the multiply blend for a screen one, so the marker lightens the
-                // page instead of darkening it. A multiply has nothing to darken on a dark page.
-                ToggleRow(stringResource(R.string.caption_inverse), inverse) { inverse = it; emit() }
-            }
-            // Glow is offered on every stroke tool except the highlighter (translucent) and the
-            // dashed pen (it draws a line, not a fillable ribbon, so a halo has nothing to hug).
-            if (tool.isStroke && tool != Tool.HIGHLIGHTER && tool != Tool.DASHED) {
-                ToggleRow(stringResource(R.string.caption_neon), glow) { glow = it; emit() }
-                if (glow) {
-                    SliderRow(stringResource(R.string.caption_glow_intensity), glowIntensity, 0f..100f) { glowIntensity = it; emit() }
+        }
+    }
+}
+
+/** Mostruário com as 5 canetas desenhadas em alta definição e animação vertical ao selecionar. */
+@Composable
+private fun SamsungPenRack(
+    selectedTool: Tool,
+    inkColor: Color,
+    onSelect: (Tool) -> Unit,
+) {
+    val pens = listOf(Tool.SPEED, Tool.CALLIGRAPHY, Tool.PEN, Tool.DASHED, Tool.TAPER)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(112.dp)
+            .clipToBounds(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        pens.forEach { penTool ->
+            val selected = penTool == selectedTool
+            val shiftY by animateFloatAsState(
+                targetValue = if (selected) 0f else 22f,
+                animationSpec = tween(durationMillis = 220),
+                label = "penSlide",
+            )
+            Box(
+                modifier = Modifier
+                    .width(50.dp)
+                    .height(108.dp)
+                    .offset(y = shiftY.dp)
+                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                    .clickable { onSelect(penTool) },
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Canvas(modifier = Modifier.size(width = 44.dp, height = 104.dp)) {
+                    drawSamsungPen(penTool, inkColor, selected)
                 }
             }
         }
+    }
+}
+
+/** Mostruário com os 2 Marca-textos (Ponta quadrada/chanfrada e Ponta redonda) com animação ao selecionar. */
+@Composable
+private fun SamsungHighlighterRack(
+    squareTip: Boolean,
+    inkColor: Color,
+    onSelectSquare: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(112.dp)
+            .clipToBounds(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        listOf(true, false).forEach { isSquare ->
+            val selected = squareTip == isSquare
+            val shiftY by animateFloatAsState(
+                targetValue = if (selected) 0f else 22f,
+                animationSpec = tween(durationMillis = 220),
+                label = "hlSlide",
+            )
+            Box(
+                modifier = Modifier
+                    .width(84.dp)
+                    .height(108.dp)
+                    .offset(y = shiftY.dp)
+                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+                    .clickable { onSelectSquare(isSquare) },
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Canvas(modifier = Modifier.size(width = 76.dp, height = 104.dp)) {
+                    drawSamsungHighlighter(isSquare, inkColor, selected)
+                }
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawSamsungPen(penTool: Tool, inkColor: Color, selected: Boolean) {
+    val w = size.width
+    val h = size.height
+    val cx = w / 2f
+    val bodyW = w * 0.56f
+    val bodyLeft = cx - bodyW / 2f
+    val bodyRight = cx + bodyW / 2f
+    val nibMetal = Color(0xFFB0B5BC)
+    val darkGrip = Color(0xFF555960)
+    val collarGrey = Color(0xFF757A82)
+    val bandColor = if (selected) inkColor else inkColor.copy(alpha = 0.82f)
+
+    when (penTool) {
+        Tool.SPEED -> {
+            // 1. Caneta-tinteiro (Fountain Pen)
+            val nibPath = Path().apply {
+                moveTo(cx, h * 0.08f)
+                lineTo(cx + bodyW * 0.42f, h * 0.30f)
+                lineTo(cx + bodyW * 0.28f, h * 0.46f)
+                lineTo(cx - bodyW * 0.28f, h * 0.46f)
+                lineTo(cx - bodyW * 0.42f, h * 0.30f)
+                close()
+            }
+            drawPath(nibPath, nibMetal)
+            drawLine(bandColor, Offset(cx, h * 0.09f), Offset(cx, h * 0.28f), strokeWidth = 2.5f)
+            drawCircle(bandColor, radius = 3.2f, center = Offset(cx, h * 0.29f))
+            drawRect(darkGrip, topLeft = Offset(bodyLeft + 2f, h * 0.46f), size = Size(bodyW - 4f, h * 0.06f))
+            drawRect(bandColor, topLeft = Offset(bodyLeft, h * 0.52f), size = Size(bodyW, h * 0.48f))
+            drawRect(darkGrip, topLeft = Offset(bodyLeft, h * 0.78f), size = Size(bodyW, h * 0.05f))
+        }
+        Tool.CALLIGRAPHY -> {
+            // 2. Caneta caligráfica (Ponta chata)
+            val nibPath = Path().apply {
+                moveTo(cx - bodyW * 0.16f, h * 0.09f)
+                lineTo(cx + bodyW * 0.16f, h * 0.09f)
+                lineTo(cx + bodyW * 0.40f, h * 0.28f)
+                lineTo(cx + bodyW * 0.30f, h * 0.46f)
+                lineTo(cx - bodyW * 0.30f, h * 0.46f)
+                lineTo(cx - bodyW * 0.40f, h * 0.28f)
+                close()
+            }
+            drawPath(nibPath, nibMetal)
+            drawLine(bandColor, Offset(cx, h * 0.09f), Offset(cx, h * 0.28f), strokeWidth = 2.5f)
+            drawRoundRect(bandColor, topLeft = Offset(cx - 2.2f, h * 0.25f), size = Size(4.4f, 9f), cornerRadius = CornerRadius(2f, 2f))
+            drawRect(darkGrip, topLeft = Offset(bodyLeft + 2f, h * 0.46f), size = Size(bodyW - 4f, h * 0.06f))
+            drawRect(bandColor, topLeft = Offset(bodyLeft, h * 0.52f), size = Size(bodyW, h * 0.48f))
+            drawRect(darkGrip, topLeft = Offset(bodyLeft, h * 0.80f), size = Size(bodyW, h * 0.05f))
+        }
+        Tool.PEN -> {
+            // 3. Caneta Esferográfica
+            val tipPath = Path().apply {
+                moveTo(cx - 2.5f, h * 0.15f)
+                lineTo(cx + 2.5f, h * 0.15f)
+                lineTo(cx, h * 0.08f)
+                close()
+            }
+            drawPath(tipPath, bandColor)
+            val conePath = Path().apply {
+                moveTo(cx - 3f, h * 0.15f)
+                lineTo(cx + 3f, h * 0.15f)
+                lineTo(bodyRight - 1f, h * 0.46f)
+                lineTo(bodyLeft + 1f, h * 0.46f)
+                close()
+            }
+            drawPath(conePath, darkGrip)
+            drawRect(collarGrey, topLeft = Offset(bodyLeft, h * 0.46f), size = Size(bodyW, h * 0.06f))
+            drawRect(bandColor, topLeft = Offset(bodyLeft, h * 0.52f), size = Size(bodyW, h * 0.22f))
+            drawRect(darkGrip, topLeft = Offset(bodyLeft, h * 0.74f), size = Size(bodyW, h * 0.26f))
+        }
+        Tool.DASHED -> {
+            // 4. Lápis / Tracejada
+            val woodPath = Path().apply {
+                moveTo(cx, h * 0.08f)
+                lineTo(bodyRight, h * 0.46f)
+                lineTo(bodyLeft, h * 0.46f)
+                close()
+            }
+            drawPath(woodPath, Color(0xFFE6C29F))
+            val leadPath = Path().apply {
+                moveTo(cx, h * 0.08f)
+                lineTo(cx + bodyW * 0.22f, h * 0.24f)
+                lineTo(cx - bodyW * 0.22f, h * 0.24f)
+                close()
+            }
+            drawPath(leadPath, bandColor)
+            drawRect(bandColor, topLeft = Offset(bodyLeft, h * 0.46f), size = Size(bodyW, h * 0.16f))
+            drawRect(darkGrip, topLeft = Offset(bodyLeft, h * 0.62f), size = Size(bodyW, h * 0.12f))
+            drawRect(bandColor, topLeft = Offset(bodyLeft, h * 0.74f), size = Size(bodyW, h * 0.26f))
+        }
+        else -> {
+            // 5. Pincel Caligráfico (Brush Pen)
+            val brushPath = Path().apply {
+                moveTo(cx, h * 0.06f)
+                cubicTo(cx + bodyW * 0.45f, h * 0.18f, cx + bodyW * 0.42f, h * 0.36f, cx + bodyW * 0.32f, h * 0.46f)
+                lineTo(cx - bodyW * 0.32f, h * 0.46f)
+                cubicTo(cx - bodyW * 0.42f, h * 0.36f, cx - bodyW * 0.45f, h * 0.18f, cx, h * 0.06f)
+                close()
+            }
+            drawPath(brushPath, Color(0xFFD6D9DE))
+            // Traço horizontal no topo do pincel indicando a cor ativa (igual ao Samsung Notes)
+            drawRoundRect(
+                color = bandColor,
+                topLeft = Offset(cx + 2f, h * 0.05f),
+                size = Size(w * 0.44f, 4.5f),
+                cornerRadius = CornerRadius(2.5f, 2.5f),
+            )
+            drawRect(Color(0xFFEAECEF), topLeft = Offset(bodyLeft, h * 0.46f), size = Size(bodyW, h * 0.54f))
+            for (i in 1..4) {
+                val ry = h * (0.52f + i * 0.09f)
+                drawLine(Color(0xFFB8BDC4), Offset(bodyLeft, ry), Offset(bodyLeft + bodyW * 0.35f, ry), strokeWidth = 1.5f)
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawSamsungHighlighter(squareTip: Boolean, inkColor: Color, selected: Boolean) {
+    val w = size.width
+    val h = size.height
+    val cx = w / 2f
+    val bodyW = w * 0.44f
+    val bodyLeft = cx - bodyW / 2f
+    val bodyRight = cx + bodyW / 2f
+    val darkCollar = Color(0xFF555960)
+    val midCollar = Color(0xFF6E737B)
+    val bandColor = if (selected) inkColor else inkColor.copy(alpha = 0.82f)
+
+    if (squareTip) {
+        // Marca-texto Ponta Quadrada / Chanfrada com faixa retangular de tinta no topo
+        drawRect(
+            color = bandColor,
+            topLeft = Offset(cx - 2f, h * 0.05f),
+            size = Size(w * 0.42f, h * 0.13f),
+        )
+        val nibPath = Path().apply {
+            moveTo(cx - bodyW * 0.24f, h * 0.19f)
+            lineTo(cx + bodyW * 0.24f, h * 0.14f)
+            lineTo(cx + bodyW * 0.24f, h * 0.24f)
+            lineTo(cx - bodyW * 0.24f, h * 0.24f)
+            close()
+        }
+        drawPath(nibPath, bandColor)
+        val collarPath = Path().apply {
+            moveTo(cx - bodyW * 0.30f, h * 0.24f)
+            lineTo(cx + bodyW * 0.30f, h * 0.24f)
+            lineTo(bodyRight - 2f, h * 0.50f)
+            lineTo(bodyLeft + 2f, h * 0.50f)
+            close()
+        }
+        drawPath(collarPath, midCollar)
+        drawRect(darkCollar, topLeft = Offset(bodyLeft, h * 0.50f), size = Size(bodyW, h * 0.06f))
+        drawRect(bandColor, topLeft = Offset(bodyLeft, h * 0.56f), size = Size(bodyW, h * 0.44f))
+        for (i in 1..4) {
+            val ry = h * (0.60f + i * 0.08f)
+            drawLine(Color.White.copy(alpha = 0.5f), Offset(bodyLeft, ry), Offset(bodyLeft + bodyW * 0.35f, ry), strokeWidth = 1.5f)
+        }
+    } else {
+        // Marca-texto Ponta Redonda (Bullet Tip)
+        drawRoundRect(
+            color = bandColor,
+            topLeft = Offset(cx - bodyW * 0.18f, h * 0.15f),
+            size = Size(bodyW * 0.36f, h * 0.14f),
+            cornerRadius = CornerRadius(bodyW * 0.18f, bodyW * 0.18f),
+        )
+        drawRect(midCollar, topLeft = Offset(cx - bodyW * 0.28f, h * 0.25f), size = Size(bodyW * 0.56f, h * 0.14f))
+        val stepPath = Path().apply {
+            moveTo(cx - bodyW * 0.32f, h * 0.39f)
+            lineTo(cx + bodyW * 0.32f, h * 0.39f)
+            lineTo(bodyRight, h * 0.58f)
+            lineTo(bodyLeft, h * 0.58f)
+            close()
+        }
+        drawPath(stepPath, darkCollar)
+        drawRect(bandColor, topLeft = Offset(bodyLeft, h * 0.58f), size = Size(bodyW, h * 0.28f))
+        drawRect(darkCollar, topLeft = Offset(bodyLeft, h * 0.86f), size = Size(bodyW, h * 0.14f))
     }
 }
 
@@ -957,10 +1416,25 @@ fun EraserConfigPopup(editor: ToolPopupHost, onDismiss: () -> Unit) {
             // A pen scribbled over ink erases it without picking up the eraser.
             ToggleRow(stringResource(R.string.caption_scribble_erase), scribble) { scribble = it; emit() }
             Spacer(Modifier.size(8.dp))
-ModeChip("Apagar toda a escrita à mão", selected = false) {
-    (editor as? Editor)?.deleteSelection()
+HorizontalDivider(Modifier.padding(vertical = 6.dp), color = LocalPalette.current.border.toComposeColor())
+Box(
+    modifier = Modifier
+        .fillMaxWidth()
+        .clip(MaterialTheme.shapes.small)
+        .clickable {
+            (editor as? Editor)?.let { ed -> ed.erasePages(listOf(ed.pageIndex)) }
+            onDismiss()
+        }
+        .padding(vertical = 8.dp),
+    contentAlignment = Alignment.Center,
+) {
+    Text(
+        text = "Apagar toda a escrita à mão",
+        color = LocalPalette.current.text.toComposeColor(),
+        fontWeight = FontWeight.Bold,
+        fontSize = 13.5.sp,
+    )
 }
-
 
         }
     }
