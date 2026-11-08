@@ -130,9 +130,7 @@ fun Toolbar(
         Tool.INSERT_SPACE to XnotesIcons.insertSpace,
     )
     var configForTool by remember { mutableStateOf<Tool?>(null) }
-    var configForTool by remember { mutableStateOf<Tool?>(null) }
     val setConfigForTool: (Tool?) -> Unit = { configForTool = it }
-
     var switcherIndex by remember { mutableStateOf<Int?>(null) }
     var renaming by remember { mutableStateOf(false) }
     var readingMode by remember { mutableStateOf(false) }
