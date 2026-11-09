@@ -725,11 +725,7 @@ internal fun HomeShelves(
             }
             Spacer(Modifier.height(20.dp))
         }
-        Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.in_folder, rootName), color = palette.text.toComposeColor(), fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            Text(counts, color = palette.textDim.toComposeColor(), fontSize = 12.5.sp)
-        }
-    }
+}
 }
 
 /** One card on the Recent shelf: the page, its name, when it was opened and the folder it's in. */

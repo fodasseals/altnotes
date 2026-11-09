@@ -43,6 +43,12 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
 import com.xnotes.canvas.SelectionMath
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
@@ -330,25 +336,37 @@ fun Toolbar(
                 }
             }
         } else if (editor.inAppFullscreen) {
-            // 3. MODO LEITURA + TELA CHEIA: Oculta todas as barras e deixa apenas o botão flutuante no canto para retornar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, end = 10.dp),
-                contentAlignment = Alignment.TopEnd,
+            // 3. MODO LEITURA + TELA CHEIA: Botão flutuante discreto sobre a página (sem barra preta)
+            var hovered by remember { mutableStateOf(false) }
+            Popup(
+                alignment = Alignment.TopEnd,
+                offset = IntOffset(-24, 24),
+                properties = PopupProperties(focusable = false),
             ) {
                 Box(
                     modifier = Modifier
+                        .size(38.dp)
+                        .alpha(if (hovered) 1f else 0.5f)
                         .clip(CircleShape)
-                        .background(palette.surface.withAlpha(210).toComposeColor())
-                        .border(1.dp, palette.border.toComposeColor(), CircleShape),
+                        .background(androidx.compose.ui.graphics.Color(0xFF2B2B2B))
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val ev = awaitPointerEvent()
+                                    if (ev.type == PointerEventType.Enter) hovered = true
+                                    else if (ev.type == PointerEventType.Exit) hovered = false
+                                }
+                            }
+                        }
+                        .clickable { editor.toggleFullscreen() },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    ToolbarIcon(
-                        XnotesIcons.fullscreen,
-                        stringResource(R.string.toolbar_fullscreen),
-                        active = true,
-                        shortcut = Keys.FULLSCREEN,
-                    ) { editor.toggleFullscreen() }
+                    Icon(
+                        imageVector = XnotesIcons.fullscreen,
+                        contentDescription = stringResource(R.string.toolbar_fullscreen),
+                        tint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }
