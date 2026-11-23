@@ -1150,14 +1150,20 @@ var onDashboard by remember { mutableStateOf(true) }
         else -> entries
     }
     // Page counts, PDF flags and the created times files record fill in behind the listing, a few files at a time.
-    LaunchedEffect(source) {
-        val todo = source?.filter { !it.isDir && editor.cachedMeta(it) == null }
-        if (todo.isNullOrEmpty()) return@LaunchedEffect
-        for (chunk in todo.chunked(12)) {
+    LaunchedEffect(source, recents, pinnedRaw, editor.noteOpen) {
+        val all = buildList {
+            source?.let { addAll(it) }
+            recents?.forEach { add(it.entry) }
+            addAll(pinnedRaw)
+        }.distinctBy { it.documentUri }
+        val todo = all.filter { editor.needsMeta(it) }
+        if (todo.isEmpty()) return@LaunchedEffect
+        for (chunk in todo.chunked(3)) {
             withContext(Dispatchers.IO) { chunk.forEach { editor.docMetaFor(it) } }
             metaTick++
         }
     }
+
     val kindOf: (BrowseEntry) -> EntryKind = { entryKind(it, editor.cachedMeta(it)) }
     val withCreated: (BrowseEntry) -> BrowseEntry = { e -> editor.createdOf(e).let { if (it == e.created) e else e.copy(created = it) } }
     val arrange: (List<BrowseEntry>) -> List<BrowseEntry> = remember(view.sortKey, view.descending, view.folders, kindFilter, metaTick) {
@@ -1193,7 +1199,11 @@ var onDashboard by remember { mutableStateOf(true) }
             WeekFields.of(java.util.Locale.getDefault()).firstDayOfWeek,
         )
     }
-    val metas = remember(arranged, metaTick) { arranged.orEmpty().filter { !it.isDir }.associate { it.documentUri to editor.cachedMeta(it) } }
+    val metas = remember(arranged, recents, pinnedRaw, metaTick, editor.noteOpen) {
+        (arranged.orEmpty() + recents.orEmpty().map { it.entry } + pinnedRaw)
+            .filter { !it.isDir }
+            .associate { it.documentUri to editor.cachedMeta(it) }
+    }
     val counts by produceState(emptyMap<String, Int>(), root, arranged, prefs.showFolderCounts) {
         val folders = arranged.orEmpty().filter { it.isDir }
         value = if (!prefs.showFolderCounts || folders.isEmpty()) emptyMap()

@@ -217,13 +217,11 @@ fun Toolbar(
                 }
 
                 StylesButton(editor, onImportTemplate)
-        if (editor.zoomLocked) {
-            ToolbarIcon(
-                icon = ZoomLockIcon,
-                contentDescription = "Destravar zoom",
-                active = true,
-            ) { editor.toggleZoomLock() }
-        }
+ToolbarIcon(
+    icon = ZoomLockIcon,
+    contentDescription = if (editor.zoomLocked) "Destravar zoom" else "Travar zoom",
+    active = editor.zoomLocked,
+) { editor.toggleZoomLock() }
 
                 ViewButton(editor)
                 ToolbarIcon(
@@ -255,8 +253,13 @@ fun Toolbar(
                     armed = editor.tool,
                     trailing = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Quando em Tela Cheia no modo edição, mostra o botão de sair da Tela Cheia ao lado do grupo
+                            // Quando em Tela Cheia no modo edição, mostra o cadeado de zoom e o botão de sair da Tela Cheia ao lado do grupo
                             if (editor.inAppFullscreen) {
+                                ToolbarIcon(
+                                    icon = ZoomLockIcon,
+                                    contentDescription = if (editor.zoomLocked) "Destravar zoom" else "Travar zoom",
+                                    active = editor.zoomLocked,
+                                ) { editor.toggleZoomLock() }
                                 ToolbarIcon(
                                     XnotesIcons.fullscreen,
                                     stringResource(R.string.toolbar_fullscreen),

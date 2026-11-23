@@ -957,20 +957,50 @@ internal fun SwatchCircles(store: SwatchStore, role: SwatchRole, selected: Rgba?
 @Composable
 internal fun ColorCodeMenuContent(onPick: (Rgba?) -> Unit) {
     val palette = LocalPalette.current
-    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    val mainColors = listOf(
+        listOf(
+            Rgba(229, 57, 53, 255),   // Vermelho
+            Rgba(251, 140, 0, 255),   // Laranja
+            Rgba(253, 216, 53, 255),  // Amarelo
+            Rgba(67, 160, 71, 255),   // Verde
+            Rgba(0, 172, 193, 255),   // Ciano
+        ),
+        listOf(
+            Rgba(30, 136, 229, 255),  // Azul
+            Rgba(142, 36, 170, 255),  // Roxo
+            Rgba(216, 27, 96, 255),   // Rosa
+            Rgba(121, 85, 72, 255),   // Marrom
+            Rgba(117, 117, 117, 255), // Cinza
+        ),
+    )
+    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-            Modifier.clip(MaterialTheme.shapes.extraSmall).clickable { onPick(null) }.padding(vertical = 2.dp),
+            Modifier.clip(MaterialTheme.shapes.extraSmall).clickable { onPick(null) }.padding(vertical = 2.dp, horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier.size(20.dp).clip(RoundedCornerShape(2.dp))
-                    .border(1.dp, palette.border.toComposeColor(), RoundedCornerShape(2.dp)),
+                Modifier.size(22.dp).clip(CircleShape)
+                    .border(1.dp, palette.border.toComposeColor(), CircleShape),
             )
             Text(stringResource(R.string.none), color = palette.text.toComposeColor(), fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
         }
-        FullSwatchGrid { onPick(it) }
+        mainColors.forEach { rowColors ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowColors.forEach { c ->
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(codeTint(c, palette))
+                            .border(1.dp, palette.border.toComposeColor(), CircleShape)
+                            .clickable { onPick(c) },
+                    )
+                }
+            }
+        }
     }
 }
+
 
 /**
  * Page/pattern colour picker: the shared [ColorPickerPopup] (Swatches + Spectrum tabs, full

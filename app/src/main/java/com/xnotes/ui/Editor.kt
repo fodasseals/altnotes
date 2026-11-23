@@ -3032,10 +3032,14 @@ controller.onMouseAction = { act -> dispatchTapGesture(act) }
         if (!canvasTouched) settlePdfTextMenu()
         zoomPercent = (state.zoom * 100).roundToInt()
         pageIndex = state.currentPageIndex()
+        state.document.path?.let { path ->
+            docMeta.updateLastPage(documentKey(path), pageIndex, state.document.pages.size, hasPdf)
+        }
         warmVisibleLinks(pageIndex)
         if (controller.isEditingText) editingField = controller.editingField()
         refreshTextBar()
     }
+
 
     /** Proactively parse the current page's PDF links off-thread (coalesce + cancel-stale) so a tap
      *  lands on a warm cache. Cheap and idempotent; a fast scroll keeps moving the target, so only the
@@ -5806,25 +5810,48 @@ controller.onMouseAction = { act -> dispatchTapGesture(act) }
     /** The page count and PDF flag [entry]'s tile shows, if they're known for the file as it is now. Instant. */
     fun cachedMeta(entry: BrowseEntry): com.xnotes.platform.DocMetaStore.Meta? =
         docMeta.get(documentKey(entry.documentUri), entry.modified)
+            ?: docMeta.latest(documentKey(entry.documentUri))
+
+    fun needsMeta(entry: BrowseEntry): Boolean {
+        if (entry.isDir) return false
+        val cur = docMeta.get(documentKey(entry.documentUri), entry.modified) ?: return true
+        return DocumentKind.ofName(entry.name) != DocumentKind.CANVAS && cur.pages <= 0
+    }
+
+    fun folderDoneCount(entry: BrowseEntry): Int =
+        docMeta.folderDoneCount(documentKey(entry.documentUri))
 
     /** [cachedMeta], reading the file's manifest when the cache has nothing current, and taking the created time it records; null for folders. IO. */
     fun docMetaFor(entry: BrowseEntry): com.xnotes.platform.DocMetaStore.Meta? {
         if (entry.isDir) return null
-        val kind = DocumentKind.ofName(entry.name) ?: return null
         val key = documentKey(entry.documentUri)
-        docMeta.get(key, entry.modified)?.let { return it }
-        val meta = if (kind == DocumentKind.CANVAS) {
-            val peek = peekFile(entry.documentUri, { canvasCodec.peek(it) }, { canvasCodec.peek(it) }) ?: return null
-            peek.created?.let { createdStore.put(key, it) }
-            // A canvas has no pages or PDF; the entry just marks it read at this modified time.
-            com.xnotes.platform.DocMetaStore.Meta(0, false, entry.modified)
-        } else {
-            val peek = peekFile(entry.documentUri, { codec.peek(it) }, { codec.peek(it) }) ?: return null
-            peek.created?.let { createdStore.put(key, it) }
-            com.xnotes.platform.DocMetaStore.Meta(peek.pages, peek.hasPdf, entry.modified)
+        val kind = DocumentKind.ofName(entry.name)
+        docMeta.get(key, entry.modified)?.takeIf { kind == DocumentKind.CANVAS || it.pages > 0 }?.let { return it }
+        val meta = when {
+            kind == DocumentKind.CANVAS -> {
+                val peek = peekFile(entry.documentUri, { canvasCodec.peek(it) }, { canvasCodec.peek(it) }) ?: return null
+                peek.created?.let { createdStore.put(key, it) }
+                com.xnotes.platform.DocMetaStore.Meta(0, false, entry.modified)
+            }
+            kind != null -> {
+                val peek = peekFile(entry.documentUri, { codec.peek(it) }, { codec.peek(it) }) ?: return null
+                peek.created?.let { createdStore.put(key, it) }
+                com.xnotes.platform.DocMetaStore.Meta(peek.pages, peek.hasPdf, entry.modified)
+            }
+            entry.name.endsWith(".pdf", ignoreCase = true) -> {
+                val count = runCatching {
+                    val u = android.net.Uri.parse(entry.documentUri)
+                    appContext.contentResolver.openFileDescriptor(u, "r")?.use { pfd ->
+                        android.graphics.pdf.PdfRenderer(pfd).use { it.pageCount }
+                    }
+                }.getOrNull() ?: return null
+                com.xnotes.platform.DocMetaStore.Meta(count, true, entry.modified)
+            }
+            else -> return null
         }
         return meta.also { docMeta.put(key, it) }
     }
+
 
     /** [entry]'s created time as known now, which its file's own record, read after the listing, may have replaced. Instant. */
     fun createdOf(entry: BrowseEntry): Long = createdStore.get(documentKey(entry.documentUri)) ?: entry.created

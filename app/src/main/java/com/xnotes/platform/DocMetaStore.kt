@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
  */
 class DocMetaStore(private val store: JsonStore) {
 
-    class Meta(val pages: Int, val pdf: Boolean, val modified: Long, val lastPage: Int = 0)
+    class Meta(val pages: Int, val pdf: Boolean, val modified: Long, val lastPage: Int = -1)
 
     private val metas: HashMap<String, Meta> = load()
     private val writer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "doc-meta").apply { isDaemon = true } }
@@ -24,8 +24,7 @@ class DocMetaStore(private val store: JsonStore) {
         val o = store.read()
         for (key in o.keys()) {
             val m = o.optJSONObject(key) ?: continue
-            out[key] = Meta(m.optInt("pages", 0), m.optBoolean("pdf", false), m.optLong("modified", 0L), m.optInt("lastPage", 0))
-
+            out[key] = Meta(m.optInt("pages", 0), m.optBoolean("pdf", false), m.optLong("modified", 0L), m.optInt("lastPage", -1))
         }
         return out
     }
@@ -41,10 +40,36 @@ class DocMetaStore(private val store: JsonStore) {
     @Synchronized
     fun put(key: String, meta: Meta) {
         val old = metas[key]
-        if (old != null && old.pages == meta.pages && old.pdf == meta.pdf && old.modified == meta.modified) return
-        metas[key] = meta
+        val keepLast = if (meta.lastPage >= 0) meta.lastPage else (old?.lastPage ?: -1)
+        val merged = Meta(meta.pages, meta.pdf, meta.modified, keepLast)
+        if (old != null && old.pages == merged.pages && old.pdf == merged.pdf && old.modified == merged.modified && old.lastPage == merged.lastPage) return
+        metas[key] = merged
         writeSoon()
     }
+
+    @Synchronized
+    fun updateLastPage(key: String, lastPage: Int, pages: Int, pdf: Boolean) {
+        val old = metas[key]
+        val newPages = if (pages > 0) pages else (old?.pages ?: 0)
+        val newPdf = pdf || (old?.pdf == true)
+        val mod = old?.modified ?: 0L
+        if (old != null && old.lastPage == lastPage && old.pages == newPages && old.pdf == newPdf) return
+        metas[key] = Meta(newPages, newPdf, mod, lastPage)
+        writeSoon()
+    }
+
+    @Synchronized
+    fun folderDoneCount(folderKey: String): Int {
+        var done = 0
+        val probe = "$folderKey/__probe__"
+        for ((k, m) in metas) {
+            if (k != folderKey && DocKeys.moved(k, folderKey, probe) != null) {
+                if (m.pages > 0 && m.lastPage >= 0 && (m.lastPage + 1) >= m.pages) done++
+            }
+        }
+        return done
+    }
+
 
     /** Carry entries across a rename or move, a folder's descendants included. */
     @Synchronized

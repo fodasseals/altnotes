@@ -159,17 +159,18 @@ internal class ExplorerBody(
 
     fun pages(e: BrowseEntry): Int = meta(e)?.pages ?: 0
     fun progressFraction(e: BrowseEntry): Float? {
-    if (e.isDir) return null
-    val m = meta(e) ?: return null
-    if (m.pages <= 0) return null
-    val cur = (m.lastPage + 1).coerceIn(0, m.pages)
-    return cur.toFloat() / m.pages.toFloat()
-}
+        if (e.isDir) return null
+        val m = meta(e) ?: return null
+        if (m.pages <= 0) return null
+        if (m.lastPage < 0) return 0f
+        val cur = (m.lastPage + 1).coerceIn(0, m.pages)
+        return cur.toFloat() / m.pages.toFloat()
+    }
 
-fun isCompleted(e: BrowseEntry): Boolean {
-    val f = progressFraction(e) ?: return false
-    return f >= 0.999f
-}
+    fun isCompleted(e: BrowseEntry): Boolean {
+        val m = meta(e) ?: return false
+        return !e.isDir && m.pages > 0 && m.lastPage >= 0 && (m.lastPage + 1) >= m.pages
+    }
 
 
     fun whenText(e: BrowseEntry, withTime: Boolean = view.showTime): String =
@@ -178,12 +179,17 @@ fun isCompleted(e: BrowseEntry): Boolean {
     /** The line under a tile's name: its date, and its size when tiles show sizes. */
     fun metaText(e: BrowseEntry): String {
         metaOverride?.invoke(e)?.let { return it }
-    if (e.isDir) {
-        val c = counts[e.documentUri]?.let { itemsLabel(words, it) }
-        val done = metas.values.filterNotNull().count { it.pages > 0 && (it.lastPage + 1) >= it.pages }
-        val prog = if (showFolderProgress && done > 0) "$done concluídos" else null
-        return listOfNotNull(c, prog).joinToString(" · ").ifEmpty { whenText(e) }
-    }
+        if (e.isDir) {
+            val total = counts[e.documentUri]
+            val c = total?.let { itemsLabel(words, it) }
+            val done = if (showFolderProgress) editor.folderDoneCount(e) else 0
+            val prog = when {
+                done <= 0 -> null
+                total != null && total > 0 -> "$done/$total concluídos"
+                else -> "$done concluído${if (done == 1) "" else "s"}"
+            }
+            return listOfNotNull(c, prog).joinToString(" · ").ifEmpty { whenText(e) }
+        }
 
         return listOfNotNull(whenText(e).ifEmpty { null }, formatSize(e.size).takeIf { view.showSize }).joinToString(" · ")
     }
@@ -351,7 +357,7 @@ internal fun GridFileTile(b: ExplorerBody, e: BrowseEntry) {
         // Only the thumbnail is outlined, so the colour code and selection show on it alone.
         Box(
             Modifier.fillMaxWidth().aspectRatio(if (b.view.thumb == ThumbShape.PAGE) 100f / 141f else 1f)
-                .clip(shape).border(if (selected) 2.dp else 1.dp, if (selected) accent else (code ?: palette.border.toComposeColor()), shape),
+                .clip(shape).border(if (selected || code != null) 2.5.dp else 1.dp, if (selected) accent else (code ?: palette.border.toComposeColor()), shape),
         ) {
             EntryThumb(b.editor, e, b.view.thumb, Modifier.fillMaxSize())
             if (selected) Box(Modifier.fillMaxSize().background(palette.selectionBackground.withAlpha(77).toComposeColor()))
@@ -482,7 +488,7 @@ internal fun FolderCardTile(b: ExplorerBody, e: BrowseEntry) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(if (b.view.thumb == ThumbShape.PAGE) 100f / 141f else 1f)
                 .clip(shape).background(palette.surface.toComposeColor())
-                .border(if (active) 2.dp else 1.dp, if (active) accent else (code ?: palette.border.toComposeColor()), shape),
+                .border(if (active || code != null) 2.5.dp else 1.dp, if (active) accent else (code ?: palette.border.toComposeColor()), shape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(XnotesIcons.folder, null, tint = code ?: palette.textDim.toComposeColor(), modifier = Modifier.size(44.dp))
@@ -779,7 +785,7 @@ private fun RecentCard(b: ExplorerBody, r: RecentEntry, onOpen: (BrowseEntry) ->
         Modifier.width(168.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOpen(e) },
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Box(Modifier.size(168.dp).clip(shape).border(1.dp, code ?: palette.border.toComposeColor(), shape)) {
+        Box(Modifier.size(168.dp).clip(shape).border(if (code != null) 2.5.dp else 1.dp, code ?: palette.border.toComposeColor(), shape)) {
             EntryThumb(b.editor, e, ThumbShape.TOP, Modifier.fillMaxSize())
             ThumbBadges(b, e, 6.dp)
         }
