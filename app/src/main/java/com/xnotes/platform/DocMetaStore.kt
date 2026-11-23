@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
  */
 class DocMetaStore(private val store: JsonStore) {
 
-    class Meta(val pages: Int, val pdf: Boolean, val modified: Long)
+    class Meta(val pages: Int, val pdf: Boolean, val modified: Long, val lastPage: Int = 0)
 
     private val metas: HashMap<String, Meta> = load()
     private val writer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "doc-meta").apply { isDaemon = true } }
@@ -24,7 +24,8 @@ class DocMetaStore(private val store: JsonStore) {
         val o = store.read()
         for (key in o.keys()) {
             val m = o.optJSONObject(key) ?: continue
-            out[key] = Meta(m.optInt("pages", 0), m.optBoolean("pdf", false), m.optLong("modified", 0L))
+            out[key] = Meta(m.optInt("pages", 0), m.optBoolean("pdf", false), m.optLong("modified", 0L), m.optInt("lastPage", 0))
+
         }
         return out
     }
@@ -77,7 +78,7 @@ class DocMetaStore(private val store: JsonStore) {
     private fun takeSnapshot(): JSONObject {
         scheduled = false
         val o = JSONObject()
-        for ((k, m) in metas) o.put(k, JSONObject().put("pages", m.pages).put("pdf", m.pdf).put("modified", m.modified))
+        for ((k, m) in metas) o.put(k, JSONObject().put("pages", m.pages).put("pdf", m.pdf).put("modified", m.modified).put("lastPage", m.lastPage))
         return o
     }
 

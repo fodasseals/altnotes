@@ -524,6 +524,8 @@ OptionDropdown(mouseButtonOptions, prefs.mouseMiddleButton) { update(prefs.copy(
             CheckRow(stringResource(R.string.pref_per_folder_views), prefs.perFolderViews) { updateHome(prefs.copy(perFolderViews = it)) }
             CheckRow(stringResource(R.string.pref_show_folder_counts), prefs.showFolderCounts) { updateHome(prefs.copy(showFolderCounts = it)) }
             CheckRow(stringResource(R.string.pref_show_extensions), prefs.showExtensions) { updateHome(prefs.copy(showExtensions = it)) }
+            CheckRow("Mostrar barra de progresso de leitura nos arquivos", prefs.showReadingProgress) { updateHome(prefs.copy(showReadingProgress = it)) }
+            CheckRow("Mostrar progresso de concluídos nas pastas", prefs.showFolderProgress) { updateHome(prefs.copy(showFolderProgress = it)) }
 
             HorizontalDivider(color = palette.border.toComposeColor())
             SectionTitle(stringResource(R.string.pref_pdf_export))

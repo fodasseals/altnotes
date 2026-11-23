@@ -1151,9 +1151,9 @@ var onDashboard by remember { mutableStateOf(true) }
     }
     // Page counts, PDF flags and the created times files record fill in behind the listing, a few files at a time.
     LaunchedEffect(source) {
-        val todo = source?.filter { !it.isDir && editor.cachedMeta(it) == null && DocumentKind.isDocument(it.name) }
+        val todo = source?.filter { !it.isDir && editor.cachedMeta(it) == null }
         if (todo.isNullOrEmpty()) return@LaunchedEffect
-        for (chunk in todo.chunked(6)) {
+        for (chunk in todo.chunked(12)) {
             withContext(Dispatchers.IO) { chunk.forEach { editor.docMetaFor(it) } }
             metaTick++
         }
@@ -1373,6 +1373,8 @@ var onDashboard by remember { mutableStateOf(true) }
         clock24 = clock24,
         dateStyle = prefs.dateStyle,
         showExtensions = prefs.showExtensions,
+        showReadingProgress = prefs.showReadingProgress,
+        showFolderProgress = prefs.showFolderProgress,
         deleteLabel = if (prefs.trashDays == 0) context.getString(R.string.delete) else context.getString(R.string.move_to_trash),
         host = host,
         words = words,

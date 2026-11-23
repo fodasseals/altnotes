@@ -113,6 +113,8 @@ data class Preferences(
     val perFolderViews: Boolean = false,
     val showFolderCounts: Boolean = true,
     val showExtensions: Boolean = false,
+    val showReadingProgress: Boolean = true,
+    val showFolderProgress: Boolean = true,
     /** Whether an exported PDF gets a bookmark for each heading of the note's text. */
     val pdfHeadingBookmarks: Boolean = true,
 ) {
@@ -201,6 +203,9 @@ data class Preferences(
         .put("per_folder_views", perFolderViews)
         .put("show_folder_counts", showFolderCounts)
         .put("show_extensions", showExtensions)
+        .put("show_reading_progress", showReadingProgress)
+        .put("show_folder_progress", showFolderProgress)
+
         .put("pdf_heading_bookmarks", pdfHeadingBookmarks)
 
     companion object {
@@ -307,6 +312,9 @@ data class Preferences(
                 perFolderViews = o.optBoolean("per_folder_views", false),
                 showFolderCounts = o.optBoolean("show_folder_counts", true),
                 showExtensions = o.optBoolean("show_extensions", false),
+                showReadingProgress = o.optBoolean("show_reading_progress", true),
+                showFolderProgress = o.optBoolean("show_folder_progress", true),
+
                 pdfHeadingBookmarks = o.optBoolean("pdf_heading_bookmarks", true),
             )
         }

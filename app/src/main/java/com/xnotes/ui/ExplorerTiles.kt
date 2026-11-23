@@ -134,6 +134,8 @@ internal class ExplorerBody(
     val clock24: Boolean,
     val dateStyle: String,
     val showExtensions: Boolean,
+    val showReadingProgress: Boolean = true,
+    val showFolderProgress: Boolean = true,
     /** What the menus call deleting: "Move to trash" while Trash is on. */
     val deleteLabel: String,
     val host: TileHost,
@@ -156,6 +158,19 @@ internal class ExplorerBody(
     fun kind(e: BrowseEntry): EntryKind = entryKind(e, meta(e))
 
     fun pages(e: BrowseEntry): Int = meta(e)?.pages ?: 0
+    fun progressFraction(e: BrowseEntry): Float? {
+    if (e.isDir) return null
+    val m = meta(e) ?: return null
+    if (m.pages <= 0) return null
+    val cur = (m.lastPage + 1).coerceIn(0, m.pages)
+    return cur.toFloat() / m.pages.toFloat()
+}
+
+fun isCompleted(e: BrowseEntry): Boolean {
+    val f = progressFraction(e) ?: return false
+    return f >= 0.999f
+}
+
 
     fun whenText(e: BrowseEntry, withTime: Boolean = view.showTime): String =
         formatWhen(words, if (view.sortKey == ExplorerSortKey.CREATED) e.created else e.modified, now, dateStyle, withTime, clock24, zone)
@@ -163,7 +178,13 @@ internal class ExplorerBody(
     /** The line under a tile's name: its date, and its size when tiles show sizes. */
     fun metaText(e: BrowseEntry): String {
         metaOverride?.invoke(e)?.let { return it }
-        if (e.isDir) return counts[e.documentUri]?.let { itemsLabel(words, it) } ?: whenText(e)
+    if (e.isDir) {
+        val c = counts[e.documentUri]?.let { itemsLabel(words, it) }
+        val done = metas.values.filterNotNull().count { it.pages > 0 && (it.lastPage + 1) >= it.pages }
+        val prog = if (showFolderProgress && done > 0) "$done concluídos" else null
+        return listOfNotNull(c, prog).joinToString(" · ").ifEmpty { whenText(e) }
+    }
+
         return listOfNotNull(whenText(e).ifEmpty { null }, formatSize(e.size).takeIf { view.showSize }).joinToString(" · ")
     }
 
@@ -335,6 +356,25 @@ internal fun GridFileTile(b: ExplorerBody, e: BrowseEntry) {
             EntryThumb(b.editor, e, b.view.thumb, Modifier.fillMaxSize())
             if (selected) Box(Modifier.fillMaxSize().background(palette.selectionBackground.withAlpha(77).toComposeColor()))
             ThumbBadges(b, e)
+            if (b.showReadingProgress) {
+                b.progressFraction(e)?.let { frac ->
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(palette.border.toComposeColor().copy(alpha = 0.45f)),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(frac.coerceIn(0f, 1f))
+                                .height(4.dp)
+                                .background(palette.accent.toComposeColor()),
+                        )
+                    }
+                }
+            }
+
             if (selecting) CheckRing(selected, Modifier.align(Alignment.TopStart).padding(8.dp))
         }
         Row(

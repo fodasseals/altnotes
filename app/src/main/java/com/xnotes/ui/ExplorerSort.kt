@@ -2,14 +2,47 @@ package com.xnotes.ui
 
 import com.xnotes.settings.ExplorerSortKey
 
-/**
- * Orders explorer entries: folders first when [foldersFirst] (rendered on their own), then files,
- * with the chosen [key]/[descending] sort applied within each group. [createdOf] supplies the
- * creation time (see [com.xnotes.platform.CreationTimeStore]); it breaks ties on the modified/size
- * keys, and name is the final ascending tiebreaker so the order is always stable.
- *
- * Pure (no Android), so it's unit-tested directly on [BrowseEntry] lists.
- */
+private fun naturalSortKey(text: String): List<Any> {
+    val s = text.lowercase()
+    val tokens = ArrayList<Any>()
+    val sb = StringBuilder()
+    var digitMode: Boolean? = null
+
+    for (ch in s) {
+        val isDigit = ch in '0'..'9'
+        if (digitMode != null && digitMode != isDigit && sb.isNotEmpty()) {
+            val chunk = sb.toString()
+            tokens.add(if (digitMode) chunk.toBigIntegerOrNull() ?: chunk else chunk)
+            sb.clear()
+        }
+        digitMode = isDigit
+        sb.append(ch)
+    }
+    if (sb.isNotEmpty()) {
+        val chunk = sb.toString()
+        tokens.add(if (digitMode == true) chunk.toBigIntegerOrNull() ?: chunk else chunk)
+    }
+    return tokens
+}
+
+internal fun compareNaturalText(a: String, b: String): Int {
+    val ka = naturalSortKey(a)
+    val kb = naturalSortKey(b)
+    val n = minOf(ka.size, kb.size)
+    for (i in 0 until n) {
+        val ea = ka[i]
+        val eb = kb[i]
+        val cmp = when {
+            ea is java.math.BigInteger && eb is java.math.BigInteger -> ea.compareTo(eb)
+            ea is java.math.BigInteger && eb is String -> -1
+            ea is String && eb is java.math.BigInteger -> 1
+            else -> (ea as String).compareTo(eb as String)
+        }
+        if (cmp != 0) return cmp
+    }
+    return ka.size.compareTo(kb.size)
+}
+
 internal fun explorerComparator(
     key: ExplorerSortKey,
     descending: Boolean,
@@ -17,12 +50,12 @@ internal fun explorerComparator(
     createdOf: (BrowseEntry) -> Long,
 ): Comparator<BrowseEntry> {
     val base: Comparator<BrowseEntry> = when (key) {
-        ExplorerSortKey.NAME -> compareBy { it.name.lowercase() }
+        ExplorerSortKey.NAME -> Comparator { a, b -> compareNaturalText(a.name, b.name) }
         ExplorerSortKey.MODIFIED -> compareBy({ it.modified }, { createdOf(it) })
         ExplorerSortKey.CREATED -> compareBy({ createdOf(it) }, { it.modified })
         ExplorerSortKey.SIZE -> compareBy({ it.size }, { createdOf(it) })
     }
-    val within = (if (descending) base.reversed() else base).thenBy { it.name.lowercase() }
+    val within = (if (descending) base.reversed() else base).thenComparator { a, b -> compareNaturalText(a.name, b.name) }
     if (!foldersFirst) return within
     return Comparator { a, b ->
         when {

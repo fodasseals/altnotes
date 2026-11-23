@@ -217,6 +217,14 @@ fun Toolbar(
                 }
 
                 StylesButton(editor, onImportTemplate)
+                if (editor.zoomLocked) {
+    ToolbarIcon(
+        icon = XnotesIcons.zoomLock,
+        contentDescription = "Destravar zoom",
+        active = true,
+    ) { editor.toggleZoomLock() }
+}
+
                 ViewButton(editor)
                 ToolbarIcon(
                     XnotesIcons.sidebar,
@@ -343,30 +351,52 @@ fun Toolbar(
                 offset = IntOffset(-24, 24),
                 properties = PopupProperties(focusable = false),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .alpha(if (hovered) 1f else 0.5f)
-                        .clip(CircleShape)
-                        .background(androidx.compose.ui.graphics.Color(0xFF2B2B2B))
-                        .pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val ev = awaitPointerEvent()
-                                    if (ev.type == PointerEventType.Enter) hovered = true
-                                    else if (ev.type == PointerEventType.Exit) hovered = false
-                                }
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val ev = awaitPointerEvent()
+                                if (ev.type == PointerEventType.Enter) hovered = true
+                                else if (ev.type == PointerEventType.Exit) hovered = false
                             }
                         }
-                        .clickable { editor.toggleFullscreen() },
-                    contentAlignment = Alignment.Center,
+                    },
                 ) {
-                    Icon(
-                        imageVector = XnotesIcons.fullscreen,
-                        contentDescription = stringResource(R.string.toolbar_fullscreen),
-                        tint = androidx.compose.ui.graphics.Color.White,
-                        modifier = Modifier.size(20.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .alpha(if (hovered) 1f else 0.5f)
+                            .clip(CircleShape)
+                            .background(androidx.compose.ui.graphics.Color(0xFF2B2B2B))
+                            .clickable { editor.toggleFullscreen() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = XnotesIcons.fullscreen,
+                            contentDescription = stringResource(R.string.toolbar_fullscreen),
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    if (editor.zoomLocked) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .alpha(if (hovered) 1f else 0.5f)
+                                .clip(CircleShape)
+                                .background(androidx.compose.ui.graphics.Color(0xFF2B2B2B))
+                                .clickable { editor.toggleZoomLock() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = XnotesIcons.fullscreen,
+                                contentDescription = "Destravar zoom",
+                                tint = androidx.compose.ui.graphics.Color(0xFFFFD600),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
