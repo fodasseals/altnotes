@@ -217,13 +217,13 @@ fun Toolbar(
                 }
 
                 StylesButton(editor, onImportTemplate)
-                if (editor.zoomLocked) {
-    ToolbarIcon(
-        icon = XnotesIcons.zoomLock,
-        contentDescription = "Destravar zoom",
-        active = true,
-    ) { editor.toggleZoomLock() }
-}
+        if (editor.zoomLocked) {
+            ToolbarIcon(
+                icon = ZoomLockIcon,
+                contentDescription = "Destravar zoom",
+                active = true,
+            ) { editor.toggleZoomLock() }
+        }
 
                 ViewButton(editor)
                 ToolbarIcon(
@@ -389,12 +389,12 @@ fun Toolbar(
                                 .clickable { editor.toggleZoomLock() },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = XnotesIcons.fullscreen,
-                                contentDescription = "Destravar zoom",
-                                tint = androidx.compose.ui.graphics.Color(0xFFFFD600),
-                                modifier = Modifier.size(20.dp),
-                            )
+                        Icon(
+                            imageVector = ZoomLockIcon,
+                            contentDescription = "Destravar zoom",
+                            tint = androidx.compose.ui.graphics.Color(0xFFFFD600),
+                            modifier = Modifier.size(20.dp),
+                        )
                         }
                     }
                 }
@@ -416,6 +416,33 @@ fun Toolbar(
 }
 
 /** Ícone de Retângulo Tracejado (estilo Samsung Notes) para a seleção em retângulo. */
+private val ZoomLockIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "ZoomLock",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            stroke = SolidColor(androidx.compose.ui.graphics.Color.White),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(7f, 11f); lineTo(17f, 11f); quadTo(19f, 11f, 19f, 13f)
+            lineTo(19f, 19f); quadTo(19f, 21f, 17f, 21f)
+            lineTo(7f, 21f); quadTo(5f, 21f, 5f, 19f)
+            lineTo(5f, 13f); quadTo(5f, 11f, 7f, 11f); close()
+            moveTo(8f, 11f); lineTo(8f, 7.5f)
+            quadTo(8f, 3.5f, 12f, 3.5f)
+            quadTo(16f, 3.5f, 16f, 7.5f)
+            lineTo(16f, 11f)
+            moveTo(12f, 14.5f); lineTo(12f, 17.5f)
+        }
+    }.build()
+}
+
 private val DashedRectIcon: ImageVector by lazy {
     ImageVector.Builder(
         name = "DashedRect",
